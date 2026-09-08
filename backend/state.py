@@ -24,10 +24,12 @@ class AppState:
 
     def reset(self) -> None:
         import city
+        import simulator
 
         revision = self.revision
         self.__init__()
         city.load(self)
+        simulator.seed(self)
         self.revision = revision + 1
 
 

@@ -33,6 +33,7 @@ class Drone(BaseModel):
     status: DroneStatus = "IDLE"
     route_id: str | None = None
     route_progress_m: float = 0.0
+    target_alt: float = 0.0
     health: dict[str, float] = {}
     home_hub_id: str
 

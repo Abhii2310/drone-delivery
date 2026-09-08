@@ -8,16 +8,20 @@ log = logging.getLogger("skyguard.bus")
 connections: set[WebSocket] = set()
 
 
-def publish(kind: str, payload: dict) -> None:
+def broadcast(message: dict) -> None:
     if not connections:
         return
-    message = json.dumps({"kind": kind, "payload": payload})
-    asyncio.create_task(_fan_out(message))
+    asyncio.create_task(_fan_out(json.dumps(message)))
+
+
+def publish(kind: str, payload: dict) -> None:
+    broadcast({"t": "ev", "kind": kind, "payload": payload})
 
 
 async def _fan_out(message: str) -> None:
-    results = await asyncio.gather(*(ws.send_text(message) for ws in list(connections)), return_exceptions=True)
-    for ws, result in zip(list(connections), results):
+    targets = list(connections)
+    results = await asyncio.gather(*(ws.send_text(message) for ws in targets), return_exceptions=True)
+    for ws, result in zip(targets, results):
         if isinstance(result, Exception):
             log.warning("dropping ws client: %s", result)
             connections.discard(ws)
