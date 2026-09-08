@@ -93,6 +93,9 @@ export default function SupervisorRail() {
   const phase = useStore((s) => s.emergencyPhase)
   const replaceable = useStore((s) => s.replaceableMission)
   const setReplaceable = useStore((s) => s.setReplaceable)
+  const weather = useStore((s) => s.weather)
+  const role = useStore((s) => s.role)
+  const capabilities = useStore((s) => s.capabilities)
   const selectAlternative = useStore((s) => s.selectAlternative)
   const setApplying = useStore((s) => s.setApplying)
   const [error, setError] = useState<string | null>(null)
@@ -200,7 +203,25 @@ export default function SupervisorRail() {
           </div>
         ) : null}
 
-        {!aiEnabled ? (
+        {weather ? (
+          <div className="mb-4 flex flex-col gap-0.5 pb-3" style={{ borderBottom: '1px solid var(--rule-soft)' }}>
+            <span className="t-label" style={{ color: 'var(--graticule)' }}>
+              WEATHER · {(weather as unknown as { source?: string }).source ?? 'LIVE'}
+            </span>
+            <span className="t-mono" style={{ color: 'var(--paper)' }}>
+              {weather.wind_speed.toFixed(1)} m/s {String(Math.round(weather.wind_direction)).padStart(3, '0')}°
+            </span>
+            <span className="t-mono-sm" style={{ color: 'var(--graticule)' }}>
+              vis {(weather.visibility_m / 1000).toFixed(1)} km
+            </span>
+          </div>
+        ) : null}
+
+        {role === 'CUSTOMER' ? (
+          <p className="t-body" style={{ color: 'var(--muted)' }}>
+            Your delivery only. Approvals require a workstation.
+          </p>
+        ) : !aiEnabled ? (
           <p className="t-body" style={{ color: 'var(--muted)' }}>
             AI Supervisor disabled. Raw safety alert only.
           </p>
@@ -335,7 +356,7 @@ export default function SupervisorRail() {
         </div>
       ) : null}
 
-      {aiEnabled ? (
+      {aiEnabled && capabilities.includes('approve') ? (
       <div className="flex gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--rule-soft)' }}>
         <button
           type="button"

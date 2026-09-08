@@ -9,7 +9,7 @@ import { setConflictPoints, setLandingPulse } from '../lib/conflicts'
 import { getInterpolated } from '../lib/telemetry'
 import { useStore } from '../store'
 import { startRender, stopRender } from '../lib/render'
-import { connect, disconnect, onEvent, onHello, onTick } from '../lib/ws'
+import { connect, disconnect, onEvent, onHello, onStatus, onTick } from '../lib/ws'
 import { enterDroneView, exitDroneView } from './FollowCam'
 
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
@@ -103,6 +103,7 @@ export default function MapCanvas() {
       ingestHello(frame)
       useStore.getState().applyHello(frame)
     })
+    const offStatus = onStatus((s) => useStore.getState().setConnection(s))
     const offTick = onTick(ingestTick)
     const flyToIncident = (incident: { drone_ids: string[]; facts: Record<string, number> }, ll: [number, number]) => {
       const views = getInterpolated(performance.now())
@@ -226,6 +227,10 @@ export default function MapCanvas() {
           text: `rescue dispatched to ${payload.zone_id} · ${Object.entries(payload.assignments).map(([p, d]) => `${p}:${d}`).join(' ')}` })
         return
       }
+      if (kind === 'weather.updated') {
+        useStore.getState().setWeather(payload.weather)
+        return
+      }
       if (kind === 'ai.changed') {
         useStore.getState().setAiEnabled(payload.enabled)
         return
@@ -336,6 +341,7 @@ export default function MapCanvas() {
       offHello()
       offTick()
       offEvent()
+      offStatus()
       window.removeEventListener('keydown', onKey)
       unsubFollow()
       stopRender()

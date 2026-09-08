@@ -83,6 +83,9 @@ export default function FleetRail() {
   const selectedDroneId = useStore((s) => s.selectedDroneId)
   const incidents = useStore((s) => s.incidents)
   const emergency = useStore((s) => s.emergency)
+  const ready = useStore((s) => s.ready)
+  const role = useStore((s) => s.role)
+  const capabilities = useStore((s) => s.capabilities)
   const phase = useStore((s) => s.emergencyPhase)
   const drawerOpen = useStore((s) => s.drawerOpen)
   const openDrawer = useStore((s) => s.openDrawer)
@@ -136,9 +139,11 @@ export default function FleetRail() {
         borderBottom: 0,
       }}
     >
-      <div className="no-scrollbar overflow-y-auto" style={{ maxHeight: '58%' }}>
-        <EmergencyPanel />
-      </div>
+      {capabilities.includes('emergency') ? (
+        <div className="no-scrollbar overflow-y-auto" style={{ maxHeight: '58%' }}>
+          <EmergencyPanel />
+        </div>
+      ) : null}
       <div className="flex items-baseline justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--rule-soft)' }}>
         <h2 className="t-label" style={{ color: 'var(--graticule)' }}>
           FLEET
@@ -150,9 +155,16 @@ export default function FleetRail() {
         ) : null}
       </div>
       <div className="no-scrollbar flex-1 overflow-y-auto">
-        {rows.length === 0 ? (
+        {!ready ? (
+          [0, 1, 2, 3].map((i) => (
+            <div key={i} className="px-3" style={{ height: 64, borderBottom: '1px solid var(--rule-soft)', opacity: 0.35 }}>
+              <div className="mt-4 h-3 w-24" style={{ background: 'var(--rule-soft)', borderRadius: 'var(--r-sm)' }} />
+              <div className="mt-2 h-2 w-40" style={{ background: 'var(--rule-soft)', borderRadius: 'var(--r-sm)' }} />
+            </div>
+          ))
+        ) : rows.length === 0 ? (
           <p className="t-body px-4 py-4" style={{ color: 'var(--muted)' }}>
-            No drones assigned to this operator.
+            {role === 'CUSTOMER' ? 'No active delivery.' : 'No drones assigned to this operator.'}
           </p>
         ) : (
           rows.map((row) => (
@@ -171,7 +183,7 @@ export default function FleetRail() {
           ))
         )}
       </div>
-      <ScenarioControls />
+      {capabilities.includes('scenarios') ? <ScenarioControls /> : null}
     </aside>
   )
 }

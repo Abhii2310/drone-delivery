@@ -254,7 +254,7 @@ def run_checks(state: AppState) -> None:
                        {"part": part, "value": round(value, 2)})
 
     w = state.weather
-    if w["wind_speed"] > 12 or w["visibility_m"] < 2000:
+    if w.get("wind_gusts", w["wind_speed"]) > 12 or w["visibility_m"] < 2000:
         live.add("WX:CITY")
         _raise(state, "WX:CITY", "WEATHER_ADVISORY", "WARNING", [], dict(w))
 

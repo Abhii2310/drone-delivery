@@ -110,7 +110,8 @@ def run(state: AppState, name: str) -> tuple[str | None, str | None]:
         drone.alt = drone.target_alt = ceiling + 15.0
         detail = f"{drone.id} climbed to {drone.alt:.0f} m"
     elif name == "BAD_WEATHER":
-        state.weather = {"wind_speed": 18.0, "wind_direction": 241.0, "visibility_m": 1800.0}
+        state.weather = {"wind_speed": 18.0, "wind_direction": 241.0, "wind_gusts": 22.0,
+                         "visibility_m": 1800.0, "precipitation": 4.0, "source": "SCENARIO", "override": True}
         detail = "wind 18 m/s, visibility 1.8 km"
     elif name == "CLOSE_ZONE":
         zone = state.zones["Z-TEMP-B"]

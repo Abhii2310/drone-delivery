@@ -13,9 +13,11 @@ import bus
 import city
 import emergency
 import missions
+import roles
 import safety_engine
 import scenarios
 import simulator
+import weather
 from state import state
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -25,16 +27,26 @@ TICK_DT = 0.1
 TICKS_PER_BROADCAST = 5
 
 
-def hello() -> dict:
+def hello(viewer: roles.Viewer | None = None) -> dict:
+    v = viewer or roles.Viewer()
+    drone_ids = roles.visible_drone_ids(state, v)
+    mission_ids = roles.visible_mission_ids(state, v)
+    drones = [d for d in state.drones.values() if d.id in drone_ids]
+    route_ids = {d.route_id for d in drones if d.route_id} | {d.previous_route_id for d in drones if d.previous_route_id}
+    body = city.serialize(state)
+    body["hubs"] = [{**h.model_dump(exclude={"x", "y"}), "ll": list(city.to_ll(h.x, h.y))} for h in roles.visible_hubs(state, v)]
     return {
         "t": "hello",
         "rev": state.revision,
         "clock": state.sim_clock,
-        "city": city.serialize(state),
-        "drones": [simulator.drone_full(d) for d in state.drones.values()],
-        "routes": [simulator.route_full(r) for r in state.routes.values()],
-        "missions": [m.model_dump() for m in state.missions.values()],
-        "incidents": [i.model_dump() for i in state.incidents.values()],
+        "role": v.role,
+        "capabilities": sorted(v.can),
+        "weather": state.weather,
+        "city": body,
+        "drones": [simulator.drone_full(d) for d in drones],
+        "routes": [simulator.route_full(r) for r in state.routes.values() if r.id in route_ids],
+        "missions": [m.model_dump() for m in state.missions.values() if m.id in mission_ids],
+        "incidents": [i.model_dump() for i in roles.visible_incidents(state, v)],
         "decisions": [d.model_dump() for d in state.decisions.values()],
         "audit": audit.query(state, 50),
         "scenarios": scenarios.NAMES,
@@ -49,9 +61,14 @@ def hello() -> dict:
 ACTIVE_MISSION_STATES = {"ENROUTE", "ARRIVING", "DELIVERED", "RETURNING"}
 
 
-def tick_message() -> dict:
-    rows = [[m.id, m.state, m.eta_s] for m in state.missions.values() if m.state in ACTIVE_MISSION_STATES]
-    return {"t": "tick", "clock": round(state.sim_clock, 2), "d": simulator.telemetry_rows(state), "m": rows}
+def tick_message(viewer: roles.Viewer | None = None) -> dict:
+    v = viewer or roles.Viewer()
+    drone_ids = roles.visible_drone_ids(state, v)
+    mission_ids = roles.visible_mission_ids(state, v)
+    rows = [[m.id, m.state, m.eta_s] for m in state.missions.values()
+            if m.state in ACTIVE_MISSION_STATES and m.id in mission_ids]
+    return {"t": "tick", "clock": round(state.sim_clock, 2),
+            "d": [r for r in simulator.telemetry_rows(state) if r[0] in drone_ids], "m": rows}
 
 
 async def tick_loop() -> None:
@@ -64,15 +81,17 @@ async def tick_loop() -> None:
             safety_engine.run_checks(state)
         n += 1
         if n % TICKS_PER_BROADCAST == 0:
-            bus.broadcast(tick_message())
+            bus.broadcast_per(tick_message)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     state.reset()
     task = asyncio.create_task(tick_loop())
+    wx = asyncio.create_task(weather.poll(state))
     yield
     task.cancel()
+    wx.cancel()
 
 
 app = FastAPI(title="SKYGUARD", lifespan=lifespan)
@@ -91,8 +110,24 @@ def health() -> dict[str, bool]:
 
 
 @app.get("/api/city")
-def get_city() -> dict:
-    return city.serialize(state)
+def get_city(role: str | None = None, operator_id: str | None = None, hub_id: str | None = None,
+             mission_id: str | None = None) -> dict:
+    v = roles.parse(role, operator_id, hub_id, mission_id)
+    body = city.serialize(state)
+    body["hubs"] = [{**h.model_dump(exclude={"x", "y"}), "ll": list(city.to_ll(h.x, h.y))} for h in roles.visible_hubs(state, v)]
+    return body
+
+
+@app.get("/api/state")
+def get_state(role: str | None = None, operator_id: str | None = None, hub_id: str | None = None,
+              mission_id: str | None = None) -> dict:
+    """Role-filtered snapshot; the network tab shows exactly what each role may see."""
+    return hello(roles.parse(role, operator_id, hub_id, mission_id))
+
+
+@app.get("/api/weather")
+def get_weather() -> dict:
+    return state.weather
 
 
 class MissionRequest(BaseModel):
@@ -121,8 +156,15 @@ class RescueRequest(BaseModel):
     payloads: list[str] = ["MEDICINE", "WATER", "FOOD", "EQUIPMENT"]
 
 
+def _require(role: str | None, capability: str) -> None:
+    viewer = roles.parse(role, None, None, None)
+    if capability not in viewer.can:
+        raise HTTPException(status_code=403, detail=f"{viewer.role} may not {capability}")
+
+
 @app.post("/api/emergency/activate")
-async def activate_emergency(req: EmergencyRequest) -> dict:
+async def activate_emergency(req: EmergencyRequest, role: str | None = None) -> dict:
+    _require(role, "emergency")
     result, error = emergency.activate(state, req.kind, req.zone_id)
     if error is not None or result is None:
         raise HTTPException(status_code=400, detail=error or "could not activate")
@@ -130,7 +172,8 @@ async def activate_emergency(req: EmergencyRequest) -> dict:
 
 
 @app.post("/api/emergency/deactivate")
-async def deactivate_emergency() -> dict:
+async def deactivate_emergency(role: str | None = None) -> dict:
+    _require(role, "emergency")
     result, error = emergency.deactivate(state)
     if error is not None:
         raise HTTPException(status_code=400, detail=error)
@@ -175,7 +218,8 @@ def get_audit(limit: int = 200) -> dict:
 
 
 @app.post("/api/decisions/{decision_id}/approve")
-async def approve_decision(decision_id: str, req: ApprovalRequest) -> dict:
+async def approve_decision(decision_id: str, req: ApprovalRequest, role: str | None = None) -> dict:
+    _require(role, "approve")
     decision = state.decisions.get(decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail=f"unknown decision {decision_id}")
@@ -219,7 +263,8 @@ async def reject_decision(decision_id: str, req: ApprovalRequest) -> dict:
 
 
 @app.post("/api/scenario/{name}")
-async def post_scenario(name: str) -> dict:
+async def post_scenario(name: str, role: str | None = None) -> dict:
+    _require(role, "scenarios")
     detail, error = scenarios.run(state, name)
     if error is not None:
         raise HTTPException(status_code=400, detail=error)
@@ -228,21 +273,23 @@ async def post_scenario(name: str) -> dict:
 
 @app.post("/api/reset")
 async def reset() -> dict:
+    # nothing may await here: the tick loop keeps running and reset must be byte-identical
     state.reset()
-    msg = hello()
-    bus.broadcast(msg)
-    return msg
+    bus.broadcast_per(hello)
+    return hello()
 
 
 @app.websocket("/ws")
-async def ws_endpoint(ws: WebSocket) -> None:
+async def ws_endpoint(ws: WebSocket, role: str | None = None, operator_id: str | None = None,
+                      hub_id: str | None = None, mission_id: str | None = None) -> None:
     await ws.accept()
-    bus.connections.add(ws)
-    await ws.send_json(hello())
+    viewer = roles.parse(role, operator_id, hub_id, mission_id)
+    bus.connections[ws] = viewer
+    await ws.send_json(hello(viewer))
     try:
         while True:
             await ws.receive_text()  # server-to-client only; inbound frames are ignored
     except WebSocketDisconnect:
         pass
     finally:
-        bus.connections.discard(ws)
+        bus.connections.pop(ws, None)

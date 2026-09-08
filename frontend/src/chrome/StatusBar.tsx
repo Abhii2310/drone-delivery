@@ -1,5 +1,7 @@
 import { useFleet } from '../lib/fleet'
 import { useStore } from '../store'
+import RolePicker from './RolePicker'
+import ResetControl from './ResetControl'
 
 const AIRBORNE = new Set(['ENROUTE', 'HOLDING', 'DIVERTING', 'LANDING'])
 
@@ -112,6 +114,8 @@ export default function StatusBar() {
         >
           EMERGENCY {emergency ? 'ON' : 'OFF'}
         </span>
+        <RolePicker />
+        <ResetControl />
         <span className="t-mono-sm" style={{ color: 'var(--muted)' }}>
           ⌘K
         </span>

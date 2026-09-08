@@ -115,6 +115,18 @@ def _drone_facts(state: AppState, d) -> dict:
             "altitude_m": round(d.alt, 1), "operator": d.operator_id}
 
 
+def _weather_facts(state: AppState, drone) -> dict:
+    import weather
+
+    return {"wind_speed_mps": round(state.weather["wind_speed"], 1),
+            "wind_direction_deg": round(state.weather["wind_direction"]),
+            "gusts_mps": round(state.weather.get("wind_gusts", state.weather["wind_speed"]), 1),
+            "visibility_m": round(state.weather["visibility_m"]),
+            "headwind_mps": round(weather.headwind(state, drone.heading), 1),
+            "battery_penalty_pct": round((weather.drain_multiplier(state, drone.heading) - 1) * 100, 1),
+            "source": state.weather.get("source", "FALLBACK")}
+
+
 def _divert_packet(state: AppState, incident: Incident) -> dict:
     import emergency
 
@@ -144,6 +156,7 @@ def _divert_packet(state: AppState, incident: Incident) -> dict:
         "alternatives": alternatives,
         "landing_options": selection,
         "active_policies": list(state.policies),
+        "weather": _weather_facts(state, drone),
         "hard_rules": HARD_RULES,
     }
 
@@ -204,6 +217,7 @@ def build_fact_packet(state: AppState, incident: Incident) -> dict:
         "alternatives": (_altitude_options(state, yielder, other, current) + alternatives[:2] + alternatives[-1:])[:4],
         "landing_options": landing,
         "active_policies": list(state.policies),
+        "weather": _weather_facts(state, yielder),
         "hard_rules": HARD_RULES,
     }
 

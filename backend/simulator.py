@@ -1,4 +1,5 @@
 import bus
+import weather
 from geo import bearing, dist, point_along, polyline_length, to_ll
 from models import Drone, DroneStatus, Route
 from state import AppState
@@ -97,9 +98,10 @@ def tick(state: AppState, dt: float) -> None:
                     drone.battery = max(0.0, drone.battery - DRAIN_LANDING)
                     drone.speed = 0.0
                 continue
-        drone.route_progress_m = min(route.total_length_m, drone.route_progress_m + drone.speed * dt)
+        ground_speed = weather.effective_speed(state, drone.heading, drone.speed)
+        drone.route_progress_m = min(route.total_length_m, drone.route_progress_m + ground_speed * dt)
         _place(drone, route)
-        rate = DRAIN_BASE + DRAIN_PER_KG * drone.payload_kg + (DRAIN_CLIMB if climbing else 0.0)
+        rate = (DRAIN_BASE + DRAIN_PER_KG * drone.payload_kg + (DRAIN_CLIMB if climbing else 0.0)) * weather.drain_multiplier(state, drone.heading)
         drone.battery = max(0.0, drone.battery - rate * dt)
         if drone.mission_id is not None and drone.mission_id in state.missions:
             remaining = route.total_length_m - drone.route_progress_m

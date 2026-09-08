@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 13.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 14.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -70,6 +70,8 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 | POST | `/api/decisions/{id}/approve` | `{actor, alternative_index?}` | `{ok, detail}`, 400 with the hard-rule reason, 404, or 409 if no longer awaiting | 9 |
 | POST | `/api/decisions/{id}/reject` | `{actor}` | `{ok, detail}` | 9 |
 | GET | `/api/audit` | `?limit` | `{events: [...]}` | 9 |
+| GET | `/api/state` | `?role&operator_id&hub_id&mission_id` | the role-filtered `hello` body | 14 |
+| GET | `/api/weather` | — | the current reading | 14 |
 | POST | `/api/ai` | `{enabled}` | `{ai_enabled}`; also broadcasts `ai.changed` | 10 |
 | POST | `/api/emergency/activate` | `{kind, zone_id}` | the emergency record with its summary, or 400 | 11 |
 | POST | `/api/emergency/deactivate` | — | `{ok}`, or 400 when none is active | 11 |
@@ -359,3 +361,34 @@ crosshair and the bottom strip plus advisory.
 
 Keyboard: `1` city, `2` incident, `3` drone view for the selected drone, `Esc` exits drone
 view or closes the drawer.
+
+## Roles and weather (Step 14)
+
+Filtering is server-side. Every REST call and the WebSocket handshake accept
+`role`, `operator_id`, `hub_id` and `mission_id`; `roles.py` resolves them to a `Viewer` and
+computes the visible drones, missions, incidents and hubs. `GET /api/state` returns exactly
+what a given viewer may see, so role filtering is inspectable in the network tab.
+
+| Role | Drones | Hubs | Capabilities |
+|---|---|---|---|
+| GOVERNMENT | all 12 | all 3 | approve, emergency, fleet, incidents, scenarios, zones |
+| OPERATOR | its own operator's | all 3 | approve, fleet, incidents |
+| HUB_ENGINEER | its own hub's | 1 | fleet, incidents (health and battery only) |
+| CUSTOMER | the one on its delivery | 1 | none |
+
+`bus.broadcast_per(build)` renders one message per connection from that connection's viewer,
+so telemetry ticks are filtered too, not just the handshake. Capability gates return 403:
+emergency and scenarios need GOVERNMENT, approval needs `approve`.
+
+`weather.py` polls Open-Meteo every 10 minutes with a 3 s timeout and a hardcoded fallback of
+8.0 m/s from 240°; after a fallback it retries in 30 s rather than waiting the full interval.
+The reading feeds the physics, not just a widget:
+`headwind = wind_speed x cos(heading - wind_direction)`, ground speed is airspeed minus
+headwind, and battery drain is multiplied by `1 + 0.04 x max(0, headwind)`. The safety engine
+raises a WEATHER_ADVISORY when gusts exceed 12 m/s or visibility drops below 2000 m, and the
+AI fact packet carries a weather block so the reasoning can cite the headwind and its battery
+penalty. BAD_WEATHER overrides the reading and marks it so polling does not undo it.
+
+Reset note: `POST /api/reset` must not await anything. It briefly awaited a weather fetch,
+during which the tick loop kept running and reset stopped being byte-identical. The observed
+weather now carries across a reset, since the sky is not part of the simulation's state.

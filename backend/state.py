@@ -30,7 +30,9 @@ class AppState:
         import simulator
 
         revision = self.revision
+        observed_weather = self.weather
         self.__init__()
+        self.weather = observed_weather  # the sky is not part of the simulation's state
         city.load(self)
         simulator.seed(self)
         self.revision = revision + 1

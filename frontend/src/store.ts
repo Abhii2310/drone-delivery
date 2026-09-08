@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 
-export type Role = 'GOVERNMENT' | 'OPERATOR' | 'HOSPITAL' | 'ENGINEER'
+export type Role = 'GOVERNMENT' | 'OPERATOR' | 'HUB_ENGINEER' | 'CUSTOMER'
 export type CameraMode = 'CITY' | 'INCIDENT' | 'DRONE'
-export type Weather = { wind_speed: number; wind_direction: number; visibility_m: number } | null
+export type Weather = { wind_speed: number; wind_direction: number; visibility_m: number; wind_gusts?: number; source?: string } | null
 export type EmergencySummary = {
   affected: number
   rerouted: number
@@ -73,6 +73,9 @@ type Store = {
   emergencyPhase: number
   cameraMode: CameraMode
   weather: Weather
+  capabilities: string[]
+  connection: { state: 'connecting' | 'open' | 'lost'; attempt: number }
+  ready: boolean
   aiEnabled: boolean
   liveAi: boolean
   composerOpen: boolean
@@ -83,7 +86,9 @@ type Store = {
   setAiEnabled: (on: boolean) => void
   setEmergency: (e: Emergency) => void
   setEmergencyPhase: (ms: number) => void
-  applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean; emergency?: Emergency }) => void
+  setWeather: (w: Weather) => void
+  setConnection: (c: { state: 'connecting' | 'open' | 'lost'; attempt: number }) => void
+  applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean; emergency?: Emergency; weather?: Weather; capabilities?: string[] }) => void
   pushEvent: (event: TimelineEvent) => void
   upsertMission: (mission: MissionRecord) => void
   upsertIncident: (incident: IncidentRecord) => void
@@ -118,6 +123,9 @@ export const useStore = create<Store>((set) => ({
   followDroneId: null,
   cameraMode: 'CITY',
   weather: null,
+  capabilities: [],
+  connection: { state: 'connecting', attempt: 0 },
+  ready: false,
   aiEnabled: true,
   liveAi: false,
   composerOpen: false,
@@ -128,7 +136,9 @@ export const useStore = create<Store>((set) => ({
   setAiEnabled: (aiEnabled) => set({ aiEnabled }),
   setEmergency: (emergency) => set({ emergency, emergencyPhase: emergency ? 0 : 0 }),
   setEmergencyPhase: (emergencyPhase) => set({ emergencyPhase }),
-  applyHello: (frame) => set({ emergency: frame.emergency ?? null, emergencyPhase: frame.emergency ? 9999 : 0, aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
+  setWeather: (weather) => set({ weather }),
+  setConnection: (connection) => set({ connection }),
+  applyHello: (frame) => set({ ready: true, weather: frame.weather ?? null, capabilities: frame.capabilities ?? [], emergency: frame.emergency ?? null, emergencyPhase: frame.emergency ? 9999 : 0, aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
   pushEvent: (event) =>
     set((s) => (s.events.some((e) => e.id === event.id) ? s : { events: [...s.events, event].slice(-120) })),
   upsertIncident: (incident) =>

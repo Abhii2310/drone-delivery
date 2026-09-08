@@ -8,6 +8,8 @@ from state import AppState
 
 log = logging.getLogger("skyguard.city")
 
+__all__ = ["load", "serialize", "to_ll", "EMERGENCY_POLYGONS", "C3_C7_CONFLICT", "BBOX_M"]
+
 LL = tuple[float, float]
 
 # All literals are (lat, lng). Extent ~4 km x 4 km around ORIGIN (12.9716, 77.5946).
