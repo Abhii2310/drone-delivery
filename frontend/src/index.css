@@ -1,24 +1,52 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 
 :root {
-  /* TODO: replace with the exact tokens from docs/UI-SPEC.md §2.2 and type scale from §2.3 */
-  --ink: #0b1220;
-  --paper: #e8ecf3;
-  --font-display: 'Barlow Semi Condensed', system-ui, sans-serif;
+  /* surfaces — navy, never tinted black */
+  --ink:          #0E1626;   /* app base, behind the map */
+  --panel:        #152238;   /* rail glass tint */
+  --panel-solid:  #1A2842;   /* drawers, modals */
+  --rule:         #2B3D5C;   /* hairlines */
+  --rule-soft:    #1F2E47;
+  /* text */
+  --paper:        #EAF0F8;   /* primary */
+  --graticule:    #8195B4;   /* secondary */
+  --muted:        #56688A;   /* tertiary, disabled */
+  /* operational state — the ONLY saturated colours on screen */
+  --nominal:      #5B9DD9;   /* VFR blue — normal ops. calm. no glow. */
+  --advisory:     #F5A524;   /* beacon amber — warning */
+  --critical:     #E0398B;   /* sectional magenta — critical */
+  --emergency:    #FF5A3C;   /* city-wide emergency, chrome only */
+  --executed:     #3DD68C;   /* success. tiny. transient. */
+  /* geometry */
+  --r-sm: 2px;  --r-md: 3px;  --r-lg: 4px;   /* nothing rounder than 4px */
+  --rail-l: 292px;  --rail-r: 360px;
+  --bar-h: 56px;    --timeline-h: 108px;  --timeline-collapsed: 32px;
+  /* motion */
+  --t-instant: 90ms;  --t-quick: 180ms;  --t-standard: 320ms;  --t-cine: 1400ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in:  cubic-bezier(0.4, 0, 1, 1);
+  /* type */
+  --font-ui:   'Barlow Semi Condensed', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
+html, body, #root { height: 100%; margin: 0; }
 
 body {
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
+
+/* type scale — UI-SPEC §2.3 */
+.t-display { font: 600 22px/1.10 var(--font-ui); }
+.t-title   { font: 600 15px/1.30 var(--font-ui); }
+.t-body    { font: 400 13px/1.45 var(--font-ui); }
+.t-label   { font: 500 11px/1.20 var(--font-ui); letter-spacing: 0.04em; }
+.t-mono-lg { font: 500 18px/1.00 var(--font-mono); font-variant-numeric: tabular-nums; }
+.t-mono    { font: 400 12px/1.30 var(--font-mono); font-variant-numeric: tabular-nums; }
+.t-mono-sm { font: 400 10.5px/1.20 var(--font-mono); font-variant-numeric: tabular-nums; }
