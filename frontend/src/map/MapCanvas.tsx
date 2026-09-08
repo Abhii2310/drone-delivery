@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import { token } from '../lib/tokens'
 import { ingestHello, ingestTick } from '../lib/telemetry'
+import { bumpRevision, getCity, ingestCity, setZoneVisible } from '../lib/city'
 import { startRender, stopRender } from '../lib/render'
 import { connect, disconnect, onHello, onTick } from '../lib/ws'
 
@@ -91,13 +92,17 @@ export default function MapCanvas() {
     map.once('load', restyle)
     const overlay = new MapboxOverlay({ interleaved: false, layers: [] })
     map.addControl(overlay)
-    const offHello = onHello(ingestHello)
+    const offHello = onHello((frame) => {
+      ingestCity(frame)
+      ingestHello(frame)
+    })
     const offTick = onTick(ingestTick)
     startRender(overlay)
     connect()
 
     mapRef.current = map
     ;(window as unknown as { __map?: maplibregl.Map }).__map = map
+    ;(window as unknown as { __city?: object }).__city = { get: getCity, setZoneVisible, bumpRevision }
     return () => {
       offHello()
       offTick()

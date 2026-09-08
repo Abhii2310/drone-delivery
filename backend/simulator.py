@@ -116,3 +116,17 @@ def telemetry_rows(state: AppState) -> list[list]:
 def drone_full(d: Drone) -> dict:
     lat, lng = to_ll(d.x, d.y)
     return {**d.model_dump(exclude={"x", "y"}), "lng": round(lng, 6), "lat": round(lat, 6)}
+
+
+def route_full(r: Route) -> dict:
+    path = []
+    for x, y, alt in r.waypoints:
+        lat, lng = to_ll(x, y)
+        path.append([round(lat, 6), round(lng, 6), alt])
+    return {
+        "id": r.id,
+        "corridor_ids": r.corridor_ids,
+        "total_length_m": round(r.total_length_m, 1),
+        "created_by": r.created_by,
+        "path": path,
+    }

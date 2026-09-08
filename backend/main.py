@@ -24,6 +24,7 @@ def hello() -> dict:
         "clock": state.sim_clock,
         "city": city.serialize(state),
         "drones": [simulator.drone_full(d) for d in state.drones.values()],
+        "routes": [simulator.route_full(r) for r in state.routes.values()],
         "missions": [m.model_dump() for m in state.missions.values()],
         "incidents": [i.model_dump() for i in state.incidents.values()],
     }

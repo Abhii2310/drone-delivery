@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 4.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 5.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -15,8 +15,13 @@ Server → client only. Inbound frames are read and ignored.
 {"t":"hello","rev":1,"clock":0.0,
  "city":{ ...same body as GET /api/city... },
  "drones":[{ ...Drone fields minus x,y..., "lng":77.6,"lat":12.97 }],
+ "routes":[{"id":"R-D-01","corridor_ids":["C4"],"total_length_m":2855.9,
+            "created_by":"fixture","path":[[lat,lng,alt_m], ...]}],
  "missions":[], "incidents":[]}
 ```
+
+`Drone` carries `previous_route_id` (null until a reroute sets it). Route `path` uses
+`[lat, lng, alt]` like all other city geometry.
 
 ### `tick` — every 500 ms (every 5th 100 ms sim tick)
 
@@ -104,3 +109,19 @@ layers imperatively via `MapboxOverlay.setProps({ layers })`. Layer ids, bottom 
 
 Simulator note: a seeded fixture drone with no `mission_id` loops its round-trip route so the
 city is never static. A drone carrying a mission still stops on arrival.
+
+## Airspace layers (Step 5)
+
+`frontend/src/lib/city.ts` holds city statics at module scope and is the single place the
+wire's `[lat, lng]` order is swapped to deck.gl's `[lng, lat]`. It exposes `visibleZones()`,
+`getActiveRoutes()`, `getGhostRoutes()` and `setZoneVisible(kindOrId, visible)`; SCHOOL starts
+hidden so a policy can raise it on stage. `window.__city` exposes the same handles.
+
+`frontend/src/lib/airspace.ts` builds the static layers, memoised on the city revision.
+Full layer order, bottom to top: `zone-volume`, `zone-edge`, `corridor-tube`, `route-active`,
+`route-ghost`, `landing-pad`, `site-glyph`, `site-label`, then the Step 4 drone layers
+`drone-shadow`, `drone-tether`, `drone-glyph`, `drone-label`.
+
+Zone volumes extrude from a per-vertex base: each ring vertex carries `z = alt_min` and
+`getElevation` returns `alt_max - alt_min`. This was tested with a floating prism and renders
+correctly, so the ground-plus-floor-plane fallback was not needed.

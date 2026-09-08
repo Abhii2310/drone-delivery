@@ -34,6 +34,7 @@ class Drone(BaseModel):
     route_id: str | None = None
     route_progress_m: float = 0.0
     target_alt: float = 0.0
+    previous_route_id: str | None = None
     health: dict[str, float] = {}
     home_hub_id: str
 

@@ -1,6 +1,7 @@
 import { IconLayer, LineLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 import type { MapboxOverlay } from '@deck.gl/mapbox'
 import { debug, getInterpolated, type DroneView } from './telemetry'
+import { buildAirspaceLayers } from './airspace'
 import { tokenRgb, type Rgb } from './tokens'
 
 const QUADCOPTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
@@ -105,7 +106,7 @@ export function startRender(overlay: MapboxOverlay): void {
       fpsWindowStart = now
     }
     lastViews = getInterpolated(now)
-    overlay.setProps({ layers: buildLayers(lastViews) })
+    overlay.setProps({ layers: [...buildAirspaceLayers(), ...buildLayers(lastViews)] })
     frameId = requestAnimationFrame(loop)
   }
   frameId = requestAnimationFrame(loop)
