@@ -11,6 +11,8 @@ import { useStore } from '../store'
 import { startRender, stopRender } from '../lib/render'
 import { connect, disconnect, onEvent, onHello, onStatus, onTick } from '../lib/ws'
 import { enterDroneView, exitDroneView } from './FollowCam'
+import { handleKey } from '../lib/keyboard'
+import { cinematic } from '../lib/cinematic'
 
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
 // fixture centroid, computed from backend/city.py bbox
@@ -125,14 +127,16 @@ export default function MapCanvas() {
         ],
         { padding: 140 },
       )
-      map.flyTo({
+      cinematic('incident-camera', 1400, () =>
+        map.flyTo({
         center: cam?.center ?? [ll[1], ll[0]],
         zoom: Math.min(cam?.zoom ?? 16, 16.5),
         pitch: 45,
         bearing: (axis + 90) % 360,
         duration: 1400,
         essential: true,
-      })
+      }),
+      )
     }
 
     const offEvent = onEvent(({ kind, payload }) => {
@@ -194,6 +198,7 @@ export default function MapCanvas() {
         store.setEmergency(em)
         const body = document.body
         if (em) {
+          cinematic('emergency-activation', 1400, () => {
           // UI-SPEC 2.10 activation sequence, cinematic, once
           body.classList.add('emergency')                                        // t=0
           setTimeout(() => body.classList.add('emergency-frame'), 180)           // t=180
@@ -207,6 +212,7 @@ export default function MapCanvas() {
           setTimeout(() => store.setEmergencyPhase(800), 800)                     // t=800 strips grey out
           setTimeout(() => store.setEmergencyPhase(1000), 1000)                   // t=1000 rescue header
           setTimeout(() => store.setEmergencyPhase(1200), 1200)                   // t=1200 summary
+          })
           store.pushEvent({ id: `emg-on-${payload.clock}`, clock: payload.clock, kind, text: `${em.kind} response active · ${em.zone_id}` })
         } else {
           body.classList.remove('emergency-frame')
@@ -225,6 +231,10 @@ export default function MapCanvas() {
       if (kind === 'rescue.dispatched') {
         useStore.getState().pushEvent({ id: `rescue-${payload.clock}`, clock: payload.clock, kind,
           text: `rescue dispatched to ${payload.zone_id} · ${Object.entries(payload.assignments).map(([p, d]) => `${p}:${d}`).join(' ')}` })
+        return
+      }
+      if (kind === 'sim.paused') {
+        useStore.getState().setPaused(payload.paused)
         return
       }
       if (kind === 'weather.updated') {
@@ -295,30 +305,17 @@ export default function MapCanvas() {
     startRender(overlay, map)
     connect()
 
-    const onKey = (e: KeyboardEvent) => {
-      const store = useStore.getState()
-      if (e.target instanceof HTMLElement && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return
-      if (e.key === '1') {
-        store.setFollow(null)
-        exitDroneView(map)
-      } else if (e.key === '2') {
-        store.setCameraMode('INCIDENT')
-      } else if (e.key === '3') {
-        const id = store.followDroneId ?? store.selectedDroneId
-        const view = getInterpolated(performance.now()).find((d) => d.id === id)
-        if (view) {
-          store.setFollow(view.id)
-          enterDroneView(map, view)
-        }
-      } else if (e.key === 'Escape') {
-        if (store.followDroneId) {
-          store.setFollow(null)
-          exitDroneView(map)
-        } else {
-          store.closeDrawer()
-        }
-      }
-    }
+    const onKey = (e: KeyboardEvent) =>
+      handleKey(e, {
+        enterDroneView: (id) => {
+          const view = getInterpolated(performance.now()).find((d) => d.id === id)
+          if (view) {
+            useStore.getState().setFollow(id)
+            enterDroneView(map, view)
+          }
+        },
+        exitDroneView: () => exitDroneView(map),
+      })
     window.addEventListener('keydown', onKey)
 
     let lastFollow: string | null = null

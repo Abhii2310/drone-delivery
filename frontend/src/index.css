@@ -25,6 +25,10 @@
   --bar-h: 56px;    --timeline-h: 108px;  --timeline-collapsed: 32px;
   /* motion */
   --t-instant: 90ms;  --t-quick: 180ms;  --t-standard: 320ms;  --t-cine: 1400ms;
+  --t-instant-ms: 90;  --t-quick-ms: 180;  --t-standard-ms: 320;  --t-cine-ms: 1400;
+  --t-camera-ms: 1200;  --t-scan: 1600ms;
+  /* fixed component geometry, from UI-SPEC 2.6 and 2.8 */
+  --drawer-w: 380px;  --strip-h: 64px;  --band-h: 44px;  --emergency-band-h: 72px;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in:  cubic-bezier(0.4, 0, 1, 1);
   /* glass — UI-SPEC 2.4, literal values live here so nothing else hardcodes a colour */
@@ -67,12 +71,34 @@ body {
   background: var(--glass-rail-bg);
   backdrop-filter: blur(20px) saturate(1.3);
   border: 1px solid var(--glass-border);
+  /* one light source, top-left: inset highlight on the top edge, shadow cast down-right */
   box-shadow: inset 0 1px 0 var(--glass-hilite), 0 16px 40px var(--glass-shadow);
+}
+
+/* L2 — drawers and modals. Never nested inside L1: glass must not sit on glass. */
+.glass-drawer {
+  background: var(--glass-drawer-bg);
+  backdrop-filter: blur(28px) saturate(1.3);
+  border-left: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hilite), -16px 0 40px var(--glass-shadow);
+}
+
+/* L3 — critical bands. Solid, no blur: legibility over effect. */
+.band-solid {
+  background: var(--panel-solid);
+  backdrop-filter: none;
 }
 
 .strip:hover { background: var(--hover-lift); }
 .strip-selected { background: var(--select-tint); }
 .glow-selected { box-shadow: 0 0 10px -2px var(--glow-nominal); }
+
+/* the only three things permitted to glow: a critical incident, emergency mode, the selection */
+.glow-critical {
+  box-shadow: 0 0 0 1px var(--critical), 0 0 24px -4px var(--glow-critical);
+  animation: pulse-critical var(--t-scan) var(--ease-out) infinite;
+}
+@keyframes pulse-critical { 0%, 100% { opacity: 1 } 50% { opacity: 0.82 } }
 
 :where(button, [tabindex]):focus-visible {
   outline: 2px solid var(--nominal);
@@ -83,8 +109,29 @@ body {
 .no-scrollbar::-webkit-scrollbar-thumb { background: var(--rule); }
 .no-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
+/* reduced motion: everything to zero except camera moves, which the map handles at 200ms */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* UI-SPEC 2.13 — degrade truthfully rather than pretending */
+@media (max-width: 1600px) {
+  :root { --timeline-h: var(--timeline-collapsed); --rail-r: 320px; }
+}
+@media (max-width: 1280px) {
+  :root { --rail-l: 264px; --rail-r: 300px; }
+}
+/* the rails already float over a full-bleed map, so at this size they simply overlay more of it */
+@media (max-width: 1024px) {
+  :root { --rail-l: 232px; --rail-r: 280px; }
+}
+/* below 768 this is read-only monitoring and says so */
+@media (max-width: 767px) {
+  :root { --rail-l: 0px; --rail-r: 0px; }
+  .rail-left, .rail-right { display: none; }
+}
+@media (max-width: 767px) {
+  .workstation-only { display: none !important; }
 }
 
 /* MapLibre's own chrome, pulled into the palette and under the 4px radius rule */

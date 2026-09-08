@@ -51,6 +51,7 @@ def hello(viewer: roles.Viewer | None = None) -> dict:
         "audit": audit.query(state, 50),
         "scenarios": scenarios.NAMES,
         "ai_enabled": state.ai_enabled,
+        "paused": state.paused,
         "emergency": state.emergency,
         "disaster_kinds": list(emergency.KINDS),
         "rescue_payloads": sorted(emergency.RESCUE_PAYLOADS),
@@ -75,8 +76,9 @@ async def tick_loop() -> None:
     n = 0
     while True:
         await asyncio.sleep(TICK_DT)
-        simulator.tick(state, TICK_DT)
-        missions.advance(state)
+        if not state.paused:
+            simulator.tick(state, TICK_DT)
+            missions.advance(state)
         if n % TICKS_PER_BROADCAST == 4:
             safety_engine.run_checks(state)
         n += 1
@@ -194,6 +196,17 @@ async def post_rescue(req: RescueRequest) -> dict:
     if error is not None or result is None:
         raise HTTPException(status_code=400, detail=error or "could not dispatch rescue")
     return result
+
+
+class PauseRequest(BaseModel):
+    paused: bool
+
+
+@app.post("/api/pause")
+async def set_pause(req: PauseRequest) -> dict:
+    state.paused = req.paused
+    bus.publish("sim.paused", {"paused": state.paused, "clock": round(state.sim_clock, 2)})
+    return {"paused": state.paused}
 
 
 class AiToggle(BaseModel):

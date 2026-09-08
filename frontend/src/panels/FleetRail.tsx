@@ -5,6 +5,7 @@ import ScenarioControls from './ScenarioControls'
 import EmergencyPanel from './EmergencyPanel'
 
 const RANK: Record<Priority, number> = { CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 }
+const STANDARD_MS = Number(getComputedStyle(document.documentElement).getPropertyValue('--t-standard-ms')) || 320
 const GROUNDED = new Set(['IDLE', 'CHARGING', 'MAINTENANCE', 'LANDED'])
 
 function stateColour(row: FleetRow, alert: 'CRITICAL' | 'WARNING' | null): string {
@@ -40,7 +41,7 @@ function Strip({ row, selected, alert, paused, onSelect, innerRef }: { row: Flee
       }}
       className={`strip relative cursor-pointer px-3 ${selected ? 'strip-selected glow-selected' : ''} ${paused ? 'strip-paused' : ''}`}
       style={{
-        height: 64,
+        height: 'var(--strip-h)',
         borderBottom: '1px solid var(--rule-soft)',
         borderRadius: 0,
         transition: 'background var(--t-instant) var(--ease-out)',
@@ -119,7 +120,7 @@ export default function FleetRail() {
         const before = rects.current.get(id)
         if (!before) continue
         const dy = before.top - el.getBoundingClientRect().top
-        if (dy) el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(0.2,0,0,1)' })
+        if (dy) el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: STANDARD_MS, easing: 'cubic-bezier(0.2,0,0,1)' })
       }
     }
     order.current = next
@@ -128,7 +129,7 @@ export default function FleetRail() {
 
   return (
     <aside
-      className="glass-rail fixed left-0 z-20 flex flex-col"
+      className="glass-rail rail-left fixed left-0 z-20 flex flex-col"
       style={{
         top: 'var(--bar-h)',
         bottom: 'var(--timeline-h)',
@@ -157,7 +158,7 @@ export default function FleetRail() {
       <div className="no-scrollbar flex-1 overflow-y-auto">
         {!ready ? (
           [0, 1, 2, 3].map((i) => (
-            <div key={i} className="px-3" style={{ height: 64, borderBottom: '1px solid var(--rule-soft)', opacity: 0.35 }}>
+            <div key={i} className="px-3" style={{ height: 'var(--strip-h)', borderBottom: '1px solid var(--rule-soft)', opacity: 0.35 }}>
               <div className="mt-4 h-3 w-24" style={{ background: 'var(--rule-soft)', borderRadius: 'var(--r-sm)' }} />
               <div className="mt-2 h-2 w-40" style={{ background: 'var(--rule-soft)', borderRadius: 'var(--r-sm)' }} />
             </div>

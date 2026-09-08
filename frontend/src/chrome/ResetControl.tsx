@@ -51,8 +51,8 @@ export default function ResetControl() {
 
   return (
     <button type="button" onClick={() => setConfirming(true)} className="t-label px-2 py-1"
-      style={{ background: 'transparent', color: done ? 'var(--executed)' : 'var(--graticule)',
-        border: `1px solid ${done ? 'var(--executed)' : 'var(--rule)'}`, borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
+      style={{ background: 'transparent', color: done ? 'var(--graticule)' : 'var(--graticule)',
+        border: '1px solid var(--rule)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
       title="Reset the demo (R)">
       {done ? `RESET ${done}` : 'RESET · R'}
     </button>

@@ -19,11 +19,10 @@ export default function EmergencyBand() {
 
   return (
     <div
-      className="fixed right-0 left-0 z-40 flex items-center gap-4 overflow-hidden px-4"
+      className="band-solid fixed right-0 left-0 z-40 flex items-center gap-4 overflow-hidden px-4"
       style={{
         top: 'var(--bar-h)',
-        height: emergency ? 72 : 0,
-        background: 'var(--panel-solid)',
+        height: emergency ? 'var(--emergency-band-h)' : 0,
         borderBottom: emergency ? '1px solid var(--emergency)' : 'none',
         transition: 'height var(--t-standard) var(--ease-out)',
       }}
@@ -32,7 +31,7 @@ export default function EmergencyBand() {
       <div className="hazard-hatch pointer-events-none absolute inset-0" />
       {emergency ? (
         <>
-          <span className="t-display relative" style={{ color: 'var(--emergency)' }}>
+          <span className="t-title relative" style={{ color: 'var(--emergency)' }}>
             {emergency.kind} RESPONSE ACTIVE
           </span>
           <span className="t-label relative" style={{ color: 'var(--paper)' }}>

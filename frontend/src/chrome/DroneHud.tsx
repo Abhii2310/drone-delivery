@@ -79,7 +79,7 @@ export default function DroneHud() {
       : 'NO CEILING AHEAD ON THIS LEG'
 
   return (
-    <div className="pointer-events-none fixed z-20" style={{ top: 'var(--bar-h)', bottom: 'var(--timeline-h)', left: 'var(--rail-l)', right: 380 }}>
+    <div className="pointer-events-none fixed z-20" style={{ top: 'var(--bar-h)', bottom: 'var(--timeline-h)', left: 'var(--rail-l)', right: 'var(--rail-r)' }}>
       <Tape heading={row.heading} />
       <Ladder side="left" value={row.alt} unit="m" ceiling={here?.ceiling ?? ahead?.band.ceiling ?? null} />
       <Ladder side="right" value={row.battery} unit="%" ceiling={null} />

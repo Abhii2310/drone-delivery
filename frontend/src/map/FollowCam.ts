@@ -13,6 +13,8 @@ const M_PER_DEG_LAT = 110900
 const M_PER_DEG_LNG = 110900 * Math.cos((12.9716 * Math.PI) / 180)
 
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+const token = (n: string, fallback: number) => Number(getComputedStyle(document.documentElement).getPropertyValue(n)) || fallback
+const cameraMs = () => (reduced() ? 200 : token('--t-camera-ms', 1200))
 
 let cam: { lng: number; lat: number; bearing: number } | null = null
 let entering = false
@@ -41,7 +43,7 @@ export function enterDroneView(map: maplibregl.Map, drone: DroneView): void {
     zoom: DRONE.zoom,
     pitch: reduced() ? 40 : DRONE.pitch,
     bearing: reduced() ? map.getBearing() : drone.heading,
-    duration: 1200,
+    duration: cameraMs(),
     essential: true,
   })
   map.once('moveend', () => {
@@ -52,7 +54,7 @@ export function enterDroneView(map: maplibregl.Map, drone: DroneView): void {
 export function exitDroneView(map: maplibregl.Map): void {
   cam = null
   entering = false
-  map.flyTo({ ...CITY, center: CITY_CENTRE, duration: 1200, essential: true })
+  map.flyTo({ ...CITY, center: CITY_CENTRE, duration: cameraMs(), essential: true })
 }
 
 export function isEntering(): boolean {

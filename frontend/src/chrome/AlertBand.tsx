@@ -26,15 +26,13 @@ export default function AlertBand() {
 
   return (
     <div
-      className="fixed right-0 left-0 z-40 flex items-center gap-4 px-4"
+      className={`band-solid fixed right-0 left-0 z-40 flex items-center gap-4 px-4 ${top?.severity === 'CRITICAL' ? 'glow-critical' : ''}`}
       style={{
         top: 'var(--bar-h)',
-        height: top ? 44 : 0,
+        height: top ? 'var(--band-h)' : 0,
         overflow: 'hidden',
-        background: 'var(--panel-solid)',
-        backdropFilter: 'none',
         borderBottom: top ? `1px solid ${colour}` : 'none',
-        boxShadow: top ? `inset 3px 0 0 ${colour}` : 'none',
+        borderLeft: top ? `3px solid ${colour}` : 'none',
         transition: 'height var(--t-quick) var(--ease-out)',
       }}
       aria-live="assertive"

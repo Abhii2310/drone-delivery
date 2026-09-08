@@ -114,8 +114,10 @@ export default function StatusBar() {
         >
           EMERGENCY {emergency ? 'ON' : 'OFF'}
         </span>
-        <RolePicker />
-        <ResetControl />
+        <span className="workstation-only flex items-center gap-3">
+          <RolePicker />
+          <ResetControl />
+        </span>
         <span className="t-mono-sm" style={{ color: 'var(--muted)' }}>
           ⌘K
         </span>

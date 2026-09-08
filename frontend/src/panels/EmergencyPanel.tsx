@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 
 const KINDS = ['FLOOD', 'FIRE', 'EARTHQUAKE', 'LANDSLIDE'] as const
@@ -29,6 +29,8 @@ function Row({ label, value, tone }: { label: string; value: number; tone?: stri
 
 export default function EmergencyPanel() {
   const emergency = useStore((s) => s.emergency)
+  const pendingConfirm = useStore((s) => s.pendingConfirm)
+  const setPendingConfirm = useStore((s) => s.setPendingConfirm)
   const [kind, setKind] = useState<string>('FLOOD')
   const [zone, setZone] = useState<string>('ZONE-B')
   const [confirming, setConfirming] = useState(false)
@@ -36,6 +38,11 @@ export default function EmergencyPanel() {
   const [error, setError] = useState<string | null>(null)
   const [payloads, setPayloads] = useState<string[]>([...PAYLOADS])
   const [assigned, setAssigned] = useState<Record<string, string> | null>(null)
+
+  useEffect(() => {
+    if (pendingConfirm === 'emergency') setConfirming(true)
+    if (pendingConfirm === null) setConfirming(false)
+  }, [pendingConfirm])
 
   async function post(path: string, body?: unknown) {
     setBusy(true)
@@ -114,7 +121,7 @@ export default function EmergencyPanel() {
                   }}
                   onClick={async () => {
                     const out = await post('/api/emergency/activate', { kind, zone_id: zone })
-                    if (out) setConfirming(false)
+                    if (out) { setConfirming(false); setPendingConfirm(null) }
                   }}
                   disabled={busy}
                   className="t-title flex-1 px-3 py-2"
@@ -124,7 +131,7 @@ export default function EmergencyPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setConfirming(false)}
+                  onClick={() => { setConfirming(false); setPendingConfirm(null) }}
                   className="t-title px-3 py-2"
                   style={{ background: 'transparent', color: 'var(--graticule)', border: '1px solid var(--rule)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
                 >
@@ -135,7 +142,7 @@ export default function EmergencyPanel() {
           ) : (
             <button
               type="button"
-              onClick={() => setConfirming(true)}
+              onClick={() => { setConfirming(true); setPendingConfirm('emergency') }}
               className="t-title w-full px-3 py-2"
               style={{ background: 'transparent', color: 'var(--emergency)', border: '1px solid var(--emergency)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
             >

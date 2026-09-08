@@ -96,6 +96,8 @@ export default function SupervisorRail() {
   const weather = useStore((s) => s.weather)
   const role = useStore((s) => s.role)
   const capabilities = useStore((s) => s.capabilities)
+  const pendingConfirm = useStore((s) => s.pendingConfirm)
+  const setPendingConfirm = useStore((s) => s.setPendingConfirm)
   const selectAlternative = useStore((s) => s.selectAlternative)
   const setApplying = useStore((s) => s.setApplying)
   const [error, setError] = useState<string | null>(null)
@@ -157,7 +159,7 @@ export default function SupervisorRail() {
 
   return (
     <aside
-      className="glass-rail fixed right-0 z-20 flex flex-col"
+      className="glass-rail rail-right fixed right-0 z-20 flex flex-col"
       style={{
         top: 'var(--bar-h)',
         bottom: 'var(--timeline-h)',
@@ -182,7 +184,7 @@ export default function SupervisorRail() {
             className="pointer-events-none absolute inset-x-0 top-0 h-16"
             style={{
               background: 'linear-gradient(180deg, transparent, var(--select-tint), transparent)',
-              animation: 'scan 1.6s var(--ease-out) infinite',
+              animation: 'scan var(--t-scan) var(--ease-out) infinite',
             }}
           />
         ) : null}
@@ -283,7 +285,7 @@ export default function SupervisorRail() {
                 </span>
                 {landing.ranked.map((p, i) => (
                   <div key={p.id} className="flex items-baseline justify-between px-2 py-1"
-                    style={{ border: `1px solid ${i === 0 ? 'var(--executed)' : 'var(--rule-soft)'}`, borderRadius: 'var(--r-sm)' }}>
+                    style={{ border: `1px solid ${i === 0 ? 'var(--nominal)' : 'var(--rule-soft)'}`, borderRadius: 'var(--r-sm)' }}>
                     <span className="t-body" style={{ color: 'var(--paper)' }}>
                       {i + 1}. {p.name}
                     </span>
@@ -357,10 +359,29 @@ export default function SupervisorRail() {
       ) : null}
 
       {aiEnabled && capabilities.includes('approve') ? (
-      <div className="flex gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--rule-soft)' }}>
+      <div className="workstation-only flex flex-col gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--rule-soft)' }}>
+        {pendingConfirm === 'approve' && decision ? (
+          <div className="flex flex-col gap-2 px-3 py-2" style={{ border: '1px solid var(--critical)', borderRadius: 'var(--r-sm)' }}>
+            <p className="t-body" style={{ color: 'var(--paper)' }}>
+              Approve this {decision.severity.toLowerCase()} decision? {decision.summary}
+            </p>
+            <div className="flex gap-2">
+              <button type="button" autoFocus onClick={() => { setPendingConfirm(null); void send('approve') }}
+                className="t-title flex-1 px-3 py-2"
+                style={{ background: 'var(--nominal)', color: 'var(--ink)', border: 0, borderRadius: 'var(--r-sm)', cursor: 'pointer' }}>
+                Confirm approval
+              </button>
+              <button type="button" onClick={() => setPendingConfirm(null)} className="t-title px-3 py-2"
+                style={{ background: 'transparent', color: 'var(--graticule)', border: '1px solid var(--rule)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => send('approve')}
+          onClick={() => (decision?.severity === 'CRITICAL' ? setPendingConfirm('approve') : send('approve'))}
           disabled={!decision || applying || selected === null}
           className="t-title flex-1 px-3 py-2"
           style={{
@@ -389,6 +410,7 @@ export default function SupervisorRail() {
         >
           Reject
         </button>
+        </div>
       </div>
       ) : null}
     </aside>

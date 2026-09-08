@@ -8,6 +8,7 @@ import SupervisorRail from './panels/SupervisorRail'
 import Timeline from './panels/Timeline'
 import DroneDrawer from './panels/DroneDrawer'
 import DroneHud from './chrome/DroneHud'
+import ReadOnlyNotice from './chrome/ReadOnlyNotice'
 
 let renders = 0
 
@@ -25,6 +26,7 @@ export default function App() {
       <SupervisorRail />
       <DroneHud />
       <DroneDrawer />
+      <ReadOnlyNotice />
       <Timeline />
     </>
   )

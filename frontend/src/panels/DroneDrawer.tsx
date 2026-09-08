@@ -55,17 +55,12 @@ export default function DroneDrawer() {
 
   return (
     <aside
-      className="glass-rail fixed right-0 z-30 flex flex-col"
+      className="glass-drawer rail-right fixed right-0 z-30 flex flex-col"
       style={{
         top: 'var(--bar-h)',
         bottom: 'var(--timeline-h)',
-        width: 380,
-        background: 'var(--glass-drawer-bg)',
-        backdropFilter: 'blur(28px)',
+        width: 'var(--drawer-w)',
         borderRadius: 0,
-        borderRight: 0,
-        borderTop: 0,
-        borderBottom: 0,
         animation: 'slide-in var(--t-standard) var(--ease-out)',
       }}
     >

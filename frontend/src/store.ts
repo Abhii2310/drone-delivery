@@ -76,6 +76,9 @@ type Store = {
   capabilities: string[]
   connection: { state: 'connecting' | 'open' | 'lost'; attempt: number }
   ready: boolean
+  paused: boolean
+  paletteOpen: boolean
+  pendingConfirm: 'approve' | 'emergency' | 'standdown' | null
   aiEnabled: boolean
   liveAi: boolean
   composerOpen: boolean
@@ -88,6 +91,9 @@ type Store = {
   setEmergencyPhase: (ms: number) => void
   setWeather: (w: Weather) => void
   setConnection: (c: { state: 'connecting' | 'open' | 'lost'; attempt: number }) => void
+  setPaused: (p: boolean) => void
+  togglePalette: () => void
+  setPendingConfirm: (k: 'approve' | 'emergency' | 'standdown' | null) => void
   applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean; emergency?: Emergency; weather?: Weather; capabilities?: string[] }) => void
   pushEvent: (event: TimelineEvent) => void
   upsertMission: (mission: MissionRecord) => void
@@ -126,6 +132,9 @@ export const useStore = create<Store>((set) => ({
   capabilities: [],
   connection: { state: 'connecting', attempt: 0 },
   ready: false,
+  paused: false,
+  paletteOpen: false,
+  pendingConfirm: null,
   aiEnabled: true,
   liveAi: false,
   composerOpen: false,
@@ -138,6 +147,9 @@ export const useStore = create<Store>((set) => ({
   setEmergencyPhase: (emergencyPhase) => set({ emergencyPhase }),
   setWeather: (weather) => set({ weather }),
   setConnection: (connection) => set({ connection }),
+  setPaused: (paused) => set({ paused }),
+  togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
+  setPendingConfirm: (pendingConfirm) => set({ pendingConfirm }),
   applyHello: (frame) => set({ ready: true, weather: frame.weather ?? null, capabilities: frame.capabilities ?? [], emergency: frame.emergency ?? null, emergencyPhase: frame.emergency ? 9999 : 0, aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
   pushEvent: (event) =>
     set((s) => (s.events.some((e) => e.id === event.id) ? s : { events: [...s.events, event].slice(-120) })),

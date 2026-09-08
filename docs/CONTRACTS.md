@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 14.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 15.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -392,3 +392,33 @@ penalty. BAD_WEATHER overrides the reading and marks it so polling does not undo
 Reset note: `POST /api/reset` must not await anything. It briefly awaited a weather fetch,
 during which the tick loop kept running and reset stopped being byte-identical. The observed
 weather now carries across a reset, since the sky is not part of the simulation's state.
+
+## Visual audit (Step 15)
+
+Token audit found no hex, rgb or rgba literals outside `index.css`, and no hardcoded radii.
+It did find three hardcoded durations (FLIP 320 ms, camera 1200 ms, incident camera 1400 ms)
+and two hardcoded geometries (drawer 380 px, strip 64 px); all now read tokens
+(`--t-standard-ms`, `--t-camera-ms`, `--t-cine-ms`, `--drawer-w`, `--strip-h`, `--band-h`,
+`--emergency-band-h`, `--t-scan`). The three remaining `#fff` are inside SVG icon masks, where
+deck.gl replaces the colour via `mask: true`.
+
+Glass has exactly three levels: `.glass-rail` (L1), `.glass-drawer` (L2, 0.94 / blur 28) and
+`.band-solid` (L3, no blur). The drone drawer previously applied L1 and L2 together; it is now
+L2 only. A live check confirms four blurred elements, none nested inside another.
+
+Glow is limited to three: `.glow-critical` on a critical alert band, the emergency `::after`
+frame, and `.glow-selected` on the selected strip. Green (`--executed`) no longer appears as a
+normal state: the landing pulse and the top-ranked landing candidate are now `--nominal`, and
+the reset control no longer turns green on success.
+
+Motion goes through `lib/cinematic.ts`, a queue that runs one cinematic at a time, so an
+incident firing during an emergency activation waits rather than fighting. Under
+`prefers-reduced-motion` queued durations collapse to 200 ms and the camera helper uses 200 ms.
+
+Keyboard is centralised in `lib/keyboard.ts`: `1/2/3` camera, arrows move through strips,
+`Enter` opens the drawer, `F` follows, `A` approves, `X` rejects, `E` toggles emergency with
+confirmation, `Space` pauses via `POST /api/pause`, `R` resets with confirmation, `Esc` closes,
+`Cmd/Ctrl-K` toggles the palette flag.
+
+Responsive: rails narrow at 1600, 1280 and 1024, and below 768 they are hidden, approval
+controls carry `.workstation-only`, and a band reads "Approvals require a workstation."
