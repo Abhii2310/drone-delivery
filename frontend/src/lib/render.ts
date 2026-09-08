@@ -1,6 +1,7 @@
 import { IconLayer, LineLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 import type { MapboxOverlay } from '@deck.gl/mapbox'
 import { debug, getInterpolated, type DroneView } from './telemetry'
+import { getConflictPoints, type ConflictPoint } from './conflicts'
 import { buildAirspaceLayers } from './airspace'
 import { tokenRgb, type Rgb } from './tokens'
 
@@ -35,13 +36,29 @@ let fps = 0
 export const getFps = () => fps
 export const getFrameCount = () => frames
 
-function buildLayers(drones: DroneView[]) {
+function buildLayers(drones: DroneView[], nowMs: number) {
   const nominal = tokenRgb('--nominal')
   const shadow = withAlpha(tokenRgb('--ink'), 102)
   const tether = withAlpha(tokenRgb('--graticule'), 89)
   const label = tokenRgb('--paper')
 
+  const conflicts = getConflictPoints()
+  const pulse = 0.5 + 0.5 * Math.sin((nowMs / 1400) * Math.PI * 2)
+
   return [
+    new ScatterplotLayer<ConflictPoint>({
+      id: 'conflict-marker',
+      data: conflicts,
+      getPosition: (c) => [c.lng, c.lat, c.alt],
+      getRadius: () => 26 + pulse * 30,
+      radiusUnits: 'meters',
+      getFillColor: (c) => withAlpha(tokenRgb(c.severity === 'CRITICAL' ? '--critical' : '--advisory'), 40 + pulse * 70),
+      stroked: true,
+      getLineColor: (c) => withAlpha(tokenRgb(c.severity === 'CRITICAL' ? '--critical' : '--advisory'), 220),
+      getLineWidth: 2,
+      lineWidthUnits: 'pixels',
+      updateTriggers: { getRadius: pulse, getFillColor: pulse },
+    }),
     new ScatterplotLayer<DroneView>({
       id: 'drone-shadow',
       data: drones,
@@ -106,7 +123,7 @@ export function startRender(overlay: MapboxOverlay): void {
       fpsWindowStart = now
     }
     lastViews = getInterpolated(now)
-    overlay.setProps({ layers: [...buildAirspaceLayers(), ...buildLayers(lastViews)] })
+    overlay.setProps({ layers: [...buildAirspaceLayers(), ...buildLayers(lastViews, now)] })
     frameId = requestAnimationFrame(loop)
   }
   frameId = requestAnimationFrame(loop)

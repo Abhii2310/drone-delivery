@@ -18,9 +18,9 @@ SEED: list[tuple[str, str, str, float, str | None, str | None, float]] = [
     ("D-03", "HUB-COM", "OP-SWIFT", 1.2, "PKG-COM-03", "C1", 0.30),
     ("D-04", "HUB-COM", "OP-SWIFT", 1.8, "PKG-COM-04", "C2", 0.20),
     ("D-05", "HUB-COM", "OP-SWIFT", 0.9, "PKG-COM-05", "C6", 0.55),
-    ("D-06", "HUB-MED", "OP-MEDX", 1.5, "PKG-MED-06", "C3", 0.05),
+    ("D-06", "HUB-MED", "OP-MEDX", 0.0, None, None, 0.0),
     ("D-07", "HUB-COM", "OP-SWIFT", 2.0, "PKG-COM-07", "C8", 0.40),
-    ("D-08", "HUB-EMG", "OP-GOV", 1.0, None, "C7", 0.70),
+    ("D-08", "HUB-EMG", "OP-GOV", 0.0, None, None, 0.0),
     ("D-09", "HUB-COM", "OP-SWIFT", 0.0, None, None, 0.0),
     ("D-10", "HUB-MED", "OP-MEDX", 0.0, None, None, 0.0),
     ("D-11", "HUB-EMG", "OP-GOV", 0.0, None, None, 0.0),
@@ -86,7 +86,7 @@ def tick(state: AppState, dt: float) -> None:
         else:
             drone.alt += CLIMB_RATE * dt if climbing else -CLIMB_RATE * dt
         if drone.route_progress_m >= route.total_length_m:
-            if drone.mission_id is None:
+            if drone.mission_id is None and route.created_by == "fixture":
                 drone.route_progress_m = 0.0  # fixture traffic loops so the city is never static
             else:
                 if drone.speed > 0:

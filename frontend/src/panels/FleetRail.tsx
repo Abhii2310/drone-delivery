@@ -1,12 +1,14 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useFleet, type FleetRow, type Priority } from '../lib/fleet'
 import { useStore } from '../store'
+import ScenarioControls from './ScenarioControls'
 
 const RANK: Record<Priority, number> = { CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 }
 const GROUNDED = new Set(['IDLE', 'CHARGING', 'MAINTENANCE', 'LANDED'])
 
-function stateColour(row: FleetRow): string {
-  if (row.status === 'LOST' || row.battery < 15) return 'var(--critical)'
+function stateColour(row: FleetRow, alert: 'CRITICAL' | 'WARNING' | null): string {
+  if (alert === 'CRITICAL' || row.status === 'LOST' || row.battery < 15) return 'var(--critical)'
+  if (alert === 'WARNING') return 'var(--advisory)'
   if (row.status === 'DIVERTING' || row.status === 'HOLDING' || row.battery < 25) return 'var(--advisory)'
   if (GROUNDED.has(row.status)) return 'var(--muted)'
   return 'var(--nominal)'
@@ -24,8 +26,8 @@ function missionLine(row: FleetRow): string {
   return `Idle at ${row.meta.home_hub_id}`
 }
 
-function Strip({ row, selected, onSelect, innerRef }: { row: FleetRow; selected: boolean; onSelect: () => void; innerRef: (el: HTMLDivElement | null) => void }) {
-  const colour = stateColour(row)
+function Strip({ row, selected, alert, onSelect, innerRef }: { row: FleetRow; selected: boolean; alert: 'CRITICAL' | 'WARNING' | null; onSelect: () => void; innerRef: (el: HTMLDivElement | null) => void }) {
+  const colour = stateColour(row, alert)
   return (
     <div
       ref={innerRef}
@@ -78,7 +80,16 @@ function Strip({ row, selected, onSelect, innerRef }: { row: FleetRow; selected:
 export default function FleetRail() {
   const fleet = useFleet()
   const selectedDroneId = useStore((s) => s.selectedDroneId)
+  const incidents = useStore((s) => s.incidents)
   const selectDrone = useStore((s) => s.selectDrone)
+
+  const alerts = new Map<string, 'CRITICAL' | 'WARNING'>()
+  for (const i of incidents) {
+    if (i.severity === 'INFO') continue
+    for (const id of i.drone_ids) {
+      if (i.severity === 'CRITICAL' || !alerts.has(id)) alerts.set(id, i.severity)
+    }
+  }
 
   const rows = [...fleet].sort((a, b) => RANK[a.meta.priority] - RANK[b.meta.priority] || a.id.localeCompare(b.id))
 
@@ -130,6 +141,7 @@ export default function FleetRail() {
               key={row.id}
               row={row}
               selected={row.id === selectedDroneId}
+              alert={alerts.get(row.id) ?? null}
               onSelect={() => selectDrone(row.id === selectedDroneId ? null : row.id)}
               innerRef={(el) => {
                 if (el) els.current.set(row.id, el)
@@ -139,6 +151,7 @@ export default function FleetRail() {
           ))
         )}
       </div>
+      <ScenarioControls />
     </aside>
   )
 }

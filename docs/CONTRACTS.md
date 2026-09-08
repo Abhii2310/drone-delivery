@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 7.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 8.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -66,6 +66,7 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 | GET | `/api/city` | — | city fixture, see below | 1 |
 | POST | `/api/reset` | — | the fresh `hello` message; also rebroadcast on `/ws` | 2 |
 | POST | `/api/missions` | `{type, payload_kind, priority, origin_hub_id, dest_id}` | the created `Mission`, or 400 with a reason | 7 |
+| POST | `/api/scenario/{name}` | — | `{name, detail}`, or 400 for an unknown or impossible scenario | 8 |
 
 ### `GET /api/city`
 
@@ -174,3 +175,33 @@ Each transition publishes `mission.created` or `mission.updated` carrying
 
 Mission state constants: payload weights Medicine 2.4 kg, Medical sample 0.4 kg, Food 1.5 kg,
 Package 1.2 kg; capacity 3.0 kg; reserve floor 20%; cruise 15.0 m/s; arrival radius 100 m.
+
+## Safety engine (Step 8)
+
+`backend/safety_engine.py` runs every 5th tick (2 Hz), offset one tick from the broadcast.
+`predict_collision` is analytic closest point of approach: `t_cpa` is clamped to a 30 s
+horizon, a vertical separation above 20 m clears the conflict, CRITICAL needs `min_sep < 15 m`
+and `t_cpa < 15 s`, and `risk_pct = 100·(1 − min_sep/40)·(1 − t_cpa/30)^0.5`. Broad phase
+buckets drones into a 500 m grid and tests adjacent cells only.
+
+Other checks: `check_geofence`, `predict_geofence_entry` (walks the remaining route polyline
+in 25 m steps), `battery_ok` (20% floor, 1.25 safety factor, includes the leg to the nearest
+approved landing zone plus the landing cost), `altitude_check`, `noise_check` (appends to
+`state.noise_ledger` and raises no incident) and `landing_capacity_check`.
+
+**Incident dedupe.** Each condition has a stable key, collisions using
+`COL:{min(a,b)}:{max(a,b)}`. One open incident per key, updated in place while the condition
+holds, auto-resolved after 3 consecutive clear checks. Incident ids are unique per occurrence
+(`INC-001`, `INC-002`, …) and the dedupe key lives in `facts.key`, so re-triggering after a
+resolve produces a genuinely new incident rather than reviving the old one.
+
+Incident events carry `{incident, conflict_ll, clock}`; `conflict_ll` is `[lat, lng]` for the
+predicted conflict point, with `facts.conflict_point` staying in metres.
+
+`backend/scenarios.py` exposes nine deterministic scenarios. `TRIGGER_COLLISION` stages two
+available drones onto C3 and C7 with 200 m and 212 m leads to the crossing, so the conflict is
+computed from real geometry; the 12 m offset makes the miss distance a real 6.4 m rather than
+zero. It reuses the same pair on repeat triggers, so it is idempotent.
+
+Simulator notes: C3 and C7 carry no seeded traffic, since they are reserved for the engineered
+conflict. Only routes with `created_by == "fixture"` loop; scenario and mission routes end.

@@ -9,6 +9,8 @@ from pydantic import BaseModel
 import bus
 import city
 import missions
+import safety_engine
+import scenarios
 import simulator
 from state import state
 
@@ -29,6 +31,7 @@ def hello() -> dict:
         "routes": [simulator.route_full(r) for r in state.routes.values()],
         "missions": [m.model_dump() for m in state.missions.values()],
         "incidents": [i.model_dump() for i in state.incidents.values()],
+        "scenarios": scenarios.NAMES,
     }
 
 
@@ -46,6 +49,8 @@ async def tick_loop() -> None:
         await asyncio.sleep(TICK_DT)
         simulator.tick(state, TICK_DT)
         missions.advance(state)
+        if n % TICKS_PER_BROADCAST == 4:
+            safety_engine.run_checks(state)
         n += 1
         if n % TICKS_PER_BROADCAST == 0:
             bus.broadcast(tick_message())
@@ -93,6 +98,14 @@ async def post_mission(req: MissionRequest) -> dict:
     if error is not None or mission is None:
         raise HTTPException(status_code=400, detail=error or "mission could not be created")
     return mission.model_dump()
+
+
+@app.post("/api/scenario/{name}")
+async def post_scenario(name: str) -> dict:
+    detail, error = scenarios.run(state, name)
+    if error is not None:
+        raise HTTPException(status_code=400, detail=error)
+    return {"name": name, "detail": detail}
 
 
 @app.post("/api/reset")

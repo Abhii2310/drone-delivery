@@ -5,6 +5,8 @@ import { token } from '../lib/tokens'
 import { ingestHello, ingestTick } from '../lib/telemetry'
 import { bumpRevision, getCity, ingestCity, ingestDroneRoute, setZoneVisible } from '../lib/city'
 import { ingestFleetMeta, updateDroneMeta } from '../lib/fleet'
+import { setConflictPoints } from '../lib/conflicts'
+import { getInterpolated } from '../lib/telemetry'
 import { useStore } from '../store'
 import { startRender, stopRender } from '../lib/render'
 import { connect, disconnect, onEvent, onHello, onTick } from '../lib/ws'
@@ -101,7 +103,70 @@ export default function MapCanvas() {
       useStore.getState().applyHello(frame)
     })
     const offTick = onTick(ingestTick)
+    const flyToIncident = (incident: { drone_ids: string[]; facts: Record<string, number> }, ll: [number, number]) => {
+      const views = getInterpolated(performance.now())
+      const pts: [number, number][] = [[ll[1], ll[0]]]
+      for (const id of incident.drone_ids) {
+        const v = views.find((d) => d.id === id)
+        if (v) pts.push([v.lng, v.lat])
+      }
+      if (pts.length < 3) return
+      // bearing along the conflict axis, then look at it side-on so both tracks stay visible
+      const [a, b] = [pts[1], pts[2]]
+      const axis = (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI
+      const lngs = pts.map((p) => p[0])
+      const lats = pts.map((p) => p[1])
+      const cam = map.cameraForBounds(
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ],
+        { padding: 140 },
+      )
+      map.flyTo({
+        center: cam?.center ?? [ll[1], ll[0]],
+        zoom: Math.min(cam?.zoom ?? 16, 16.5),
+        pitch: 45,
+        bearing: (axis + 90) % 360,
+        duration: 1400,
+        essential: true,
+      })
+    }
+
     const offEvent = onEvent(({ kind, payload }) => {
+      if (kind.startsWith('incident.')) {
+        const { incident, conflict_ll, clock } = payload
+        if (conflict_ll) incident.facts.conflict_ll = conflict_ll
+        const store = useStore.getState()
+        store.upsertIncident(incident)
+        const open = useStore.getState().incidents
+        setConflictPoints(
+          open
+            .filter((i) => i.facts.conflict_point && i.kind === 'COLLISION')
+            .map((i) => {
+              const ll = (i.facts as Record<string, number[]>).conflict_ll
+              return {
+                id: i.id,
+                lng: ll?.[1] ?? 0,
+                lat: ll?.[0] ?? 0,
+                alt: (i.facts as unknown as Record<string, number>).conflict_alt_m ?? 80,
+                severity: i.severity,
+              }
+            })
+            .filter((p) => p.lng !== 0),
+        )
+        if (kind === 'incident.created') {
+          store.pushEvent({ id: `${incident.id}-created`, clock, kind, text: `${incident.id} ${incident.kind} ${incident.severity} · ${incident.drone_ids.join(' × ')}` })
+          if (conflict_ll) flyToIncident(incident, conflict_ll)
+        } else if (incident.state === 'RESOLVED') {
+          store.pushEvent({ id: `${incident.id}-resolved`, clock, kind, text: `${incident.id} resolved` })
+        }
+        return
+      }
+      if (kind === 'scenario.fired') {
+        useStore.getState().pushEvent({ id: `scn-${payload.clock}-${payload.name}`, clock: payload.clock, kind, text: `${payload.name} · ${payload.detail}` })
+        return
+      }
       if (!kind.startsWith('mission.')) return
       const { mission, drone, route, clock } = payload
       if (drone) {
