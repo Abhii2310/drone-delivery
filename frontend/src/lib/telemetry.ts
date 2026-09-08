@@ -1,5 +1,7 @@
 import type { HelloFrame, TickFrame, TickRow } from './ws'
 
+export type MissionRow = [id: string, state: string, eta_s: number | null]
+
 export type DroneView = {
   id: string
   lng: number
@@ -21,8 +23,12 @@ let curr: Frame | null = null
 let lastCallMs = 0
 const easedHeading = new Map<string, number>()
 
+let missionRows: MissionRow[] = []
+export const getMissionRows = (): MissionRow[] => missionRows
+
 export function ingestTick(frame: TickFrame): void {
   if (curr && frame.clock <= curr.clock) return // duplicate or out-of-order delivery
+  missionRows = frame.m ?? []
   const next: Frame = { clock: frame.clock, rows: frame.d, receivedAt: performance.now() }
   prev = curr
   curr = next

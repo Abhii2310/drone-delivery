@@ -1,6 +1,6 @@
 export type HelloFrame = { t: 'hello'; rev: number; clock: number; city: any; drones: any[]; routes: any[]; missions: any[]; incidents: any[] }
 export type TickRow = [id: string, lng: number, lat: number, alt: number, heading: number, speed: number, battery: number, status: number]
-export type TickFrame = { t: 'tick'; clock: number; d: TickRow[] }
+export type TickFrame = { t: 'tick'; clock: number; d: TickRow[]; m?: [string, string, number | null][] }
 export type EventFrame = { t: 'ev'; kind: string; payload: any }
 export type Frame = HelloFrame | TickFrame | EventFrame
 

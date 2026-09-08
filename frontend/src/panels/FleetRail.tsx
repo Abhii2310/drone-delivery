@@ -15,7 +15,10 @@ function stateColour(row: FleetRow): string {
 const batteryColour = (b: number) => (b < 15 ? 'var(--critical)' : b < 25 ? 'var(--advisory)' : 'var(--paper)')
 
 function missionLine(row: FleetRow): string {
-  if (row.meta.mission_id) return row.meta.mission_id
+  if (row.meta.mission_id) {
+    const eta = row.etaS === null ? '' : ` · ETA ${Math.max(0, Math.round(row.etaS))}s`
+    return `${row.meta.mission_id} ${row.missionState ?? ''}${eta}`
+  }
   if (row.meta.package_id) return `${row.meta.package_id} · ${row.meta.operator_id}`
   if (!GROUNDED.has(row.status)) return `${row.meta.operator_id} · in transit`
   return `Idle at ${row.meta.home_hub_id}`

@@ -2,11 +2,13 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import bus
 import city
+import missions
 import simulator
 from state import state
 
@@ -30,8 +32,12 @@ def hello() -> dict:
     }
 
 
+ACTIVE_MISSION_STATES = {"ENROUTE", "ARRIVING", "DELIVERED", "RETURNING"}
+
+
 def tick_message() -> dict:
-    return {"t": "tick", "clock": round(state.sim_clock, 2), "d": simulator.telemetry_rows(state)}
+    rows = [[m.id, m.state, m.eta_s] for m in state.missions.values() if m.state in ACTIVE_MISSION_STATES]
+    return {"t": "tick", "clock": round(state.sim_clock, 2), "d": simulator.telemetry_rows(state), "m": rows}
 
 
 async def tick_loop() -> None:
@@ -39,6 +45,7 @@ async def tick_loop() -> None:
     while True:
         await asyncio.sleep(TICK_DT)
         simulator.tick(state, TICK_DT)
+        missions.advance(state)
         n += 1
         if n % TICKS_PER_BROADCAST == 0:
             bus.broadcast(tick_message())
@@ -70,6 +77,22 @@ def health() -> dict[str, bool]:
 @app.get("/api/city")
 def get_city() -> dict:
     return city.serialize(state)
+
+
+class MissionRequest(BaseModel):
+    type: str = "DELIVERY"
+    payload_kind: str
+    priority: str = "NORMAL"
+    origin_hub_id: str
+    dest_id: str
+
+
+@app.post("/api/missions")
+async def post_mission(req: MissionRequest) -> dict:
+    mission, error = missions.create_mission(state, req.type, req.payload_kind, req.priority, req.origin_hub_id, req.dest_id)
+    if error is not None or mission is None:
+        raise HTTPException(status_code=400, detail=error or "mission could not be created")
+    return mission.model_dump()
 
 
 @app.post("/api/reset")

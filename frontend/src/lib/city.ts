@@ -21,10 +21,12 @@ export type City = {
 const swap = (p: number[]): LngLat => [p[1], p[0]]
 
 let city: City | null = null
-let routes: RoutePath[] = []
-let activeRouteIds = new Set<string>()
-let ghostRouteIds = new Set<string>()
+const routes = new Map<string, RoutePath>()
+const droneRoutes = new Map<string, { active: string | null; ghost: string | null }>()
 let revision = 0
+
+const toPath = (path: number[][]): [number, number, number][] =>
+  path.map((p): [number, number, number] => [p[1], p[0], p[2]])
 
 const hidden = new Set<string>(['SCHOOL'])
 
@@ -61,19 +63,29 @@ export function ingestCity(frame: HelloFrame): void {
     destinations: raw.destinations.map((d) => ({ id: d.id, name: d.name, kind: d.kind, at: swap(d.ll) })),
     pads: raw.landing_zones.map((p) => ({ id: p.id, name: p.name, permission: p.permission, at: swap(p.ll) })),
   }
-  routes = (frame.routes as { id: string; path: number[][] }[]).map((r) => ({
-    id: r.id,
-    path: r.path.map((p): [number, number, number] => [p[1], p[0], p[2]]),
-  }))
-  activeRouteIds = new Set(frame.drones.map((d) => d.route_id).filter(Boolean))
-  ghostRouteIds = new Set(frame.drones.map((d) => d.previous_route_id).filter(Boolean))
+  routes.clear()
+  droneRoutes.clear()
+  for (const r of frame.routes as { id: string; path: number[][] }[]) routes.set(r.id, { id: r.id, path: toPath(r.path) })
+  for (const d of frame.drones) droneRoutes.set(d.id, { active: d.route_id ?? null, ghost: d.previous_route_id ?? null })
   revision++
 }
 
 export const getCity = (): City | null => city
 export const getRevision = (): number => revision
-export const getActiveRoutes = (): RoutePath[] => routes.filter((r) => activeRouteIds.has(r.id))
-export const getGhostRoutes = (): RoutePath[] => routes.filter((r) => ghostRouteIds.has(r.id))
+const collect = (pick: 'active' | 'ghost'): RoutePath[] => {
+  const ids = new Set<string>()
+  for (const link of droneRoutes.values()) if (link[pick]) ids.add(link[pick] as string)
+  return [...ids].map((id) => routes.get(id)).filter((r): r is RoutePath => r !== undefined)
+}
+
+export const getActiveRoutes = (): RoutePath[] => collect('active')
+export const getGhostRoutes = (): RoutePath[] => collect('ghost')
+
+export function ingestDroneRoute(drone: { id: string; route_id: string | null; previous_route_id: string | null }, route?: { id: string; path: number[][] }): void {
+  if (route) routes.set(route.id, { id: route.id, path: toPath(route.path) })
+  droneRoutes.set(drone.id, { active: drone.route_id, ghost: drone.previous_route_id })
+  revision++
+}
 export const visibleZones = (): Zone[] => (city ? city.zones.filter((z) => !hidden.has(z.kind) && !hidden.has(z.id)) : [])
 
 export function bumpRevision(): void {

@@ -3,11 +3,11 @@ import maplibregl from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import { token } from '../lib/tokens'
 import { ingestHello, ingestTick } from '../lib/telemetry'
-import { bumpRevision, getCity, ingestCity, setZoneVisible } from '../lib/city'
-import { ingestFleetMeta } from '../lib/fleet'
+import { bumpRevision, getCity, ingestCity, ingestDroneRoute, setZoneVisible } from '../lib/city'
+import { ingestFleetMeta, updateDroneMeta } from '../lib/fleet'
 import { useStore } from '../store'
 import { startRender, stopRender } from '../lib/render'
-import { connect, disconnect, onHello, onTick } from '../lib/ws'
+import { connect, disconnect, onEvent, onHello, onTick } from '../lib/ws'
 
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
 // fixture centroid, computed from backend/city.py bbox
@@ -101,6 +101,22 @@ export default function MapCanvas() {
       useStore.getState().applyHello(frame)
     })
     const offTick = onTick(ingestTick)
+    const offEvent = onEvent(({ kind, payload }) => {
+      if (!kind.startsWith('mission.')) return
+      const { mission, drone, route, clock } = payload
+      if (drone) {
+        ingestDroneRoute(drone, route)
+        updateDroneMeta(drone)
+      }
+      const store = useStore.getState()
+      store.upsertMission(mission)
+      store.pushEvent({
+        id: `${mission.id}-${mission.state}-${clock}`,
+        clock,
+        kind,
+        text: `${mission.id} ${mission.state} · ${mission.drone_id ?? '--'} ${mission.origin_hub_id} → ${mission.dest_id}`,
+      })
+    })
     startRender(overlay)
     connect()
 
@@ -110,6 +126,7 @@ export default function MapCanvas() {
     return () => {
       offHello()
       offTick()
+      offEvent()
       stopRender()
       disconnect()
       map.remove()

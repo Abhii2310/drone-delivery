@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { getInterpolated } from './telemetry'
+import { getInterpolated, getMissionRows } from './telemetry'
 import type { HelloFrame } from './ws'
 
 export const STATUS_NAMES = ['IDLE', 'CHARGING', 'MAINTENANCE', 'ENROUTE', 'HOLDING', 'DIVERTING', 'LANDING', 'LANDED', 'LOST'] as const
@@ -7,7 +7,7 @@ export type StatusName = (typeof STATUS_NAMES)[number]
 export type Priority = 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW'
 
 export type DroneMeta = { id: string; operator_id: string; priority: Priority; mission_id: string | null; package_id: string | null; home_hub_id: string; payload_kg: number }
-export type FleetRow = { id: string; alt: number; battery: number; speed: number; heading: number; status: StatusName; meta: DroneMeta }
+export type FleetRow = { id: string; alt: number; battery: number; speed: number; heading: number; status: StatusName; meta: DroneMeta; missionState: string | null; etaS: number | null }
 
 const FEED_HZ = 4
 
@@ -24,15 +24,22 @@ export function ingestFleetMeta(frame: HelloFrame): void {
 
 function tick(): void {
   const views = getInterpolated(performance.now())
-  snapshot = views.map((v) => ({
+  const byMission = new Map(getMissionRows().map((r) => [r[0], r]))
+  snapshot = views.map((v) => {
+    const m = meta.get(v.id)
+    const row = m?.mission_id ? byMission.get(m.mission_id) : undefined
+    return {
     id: v.id,
     alt: v.alt,
     battery: v.battery,
     speed: v.speed,
     heading: v.heading,
     status: STATUS_NAMES[v.status] ?? 'IDLE',
-    meta: meta.get(v.id) ?? { id: v.id, operator_id: '', priority: 'NORMAL', mission_id: null, package_id: null, home_hub_id: '', payload_kg: 0 },
-  }))
+      meta: m ?? { id: v.id, operator_id: '', priority: 'NORMAL', mission_id: null, package_id: null, home_hub_id: '', payload_kg: 0 },
+      missionState: row?.[1] ?? null,
+      etaS: row?.[2] ?? null,
+    }
+  })
   for (const l of listeners) l()
 }
 
@@ -50,3 +57,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 export const useFleet = (): FleetRow[] => useSyncExternalStore(subscribe, () => snapshot, () => snapshot)
+
+export function updateDroneMeta(drone: DroneMeta): void {
+  meta.set(drone.id, drone)
+}

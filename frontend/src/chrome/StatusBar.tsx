@@ -22,6 +22,8 @@ export default function StatusBar() {
   const incidents = useStore((s) => s.incidents.length)
   const emergency = useStore((s) => s.emergency)
   const aiEnabled = useStore((s) => s.aiEnabled)
+  const composerOpen = useStore((s) => s.composerOpen)
+  const toggleComposer = useStore((s) => s.toggleComposer)
   const airborne = fleet.filter((d) => AIRBORNE.has(d.status)).length
 
   return (
@@ -54,6 +56,21 @@ export default function StatusBar() {
       </div>
 
       <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => toggleComposer()}
+          className="t-label px-3 py-1.5"
+          style={{
+            background: composerOpen ? 'var(--nominal)' : 'transparent',
+            color: composerOpen ? 'var(--ink)' : 'var(--nominal)',
+            border: '1px solid var(--nominal)',
+            borderRadius: 'var(--r-sm)',
+            cursor: 'pointer',
+          }}
+          aria-pressed={composerOpen}
+        >
+          NEW DELIVERY
+        </button>
         <span className="flex items-center gap-1.5">
           <span
             className="inline-block h-1.5 w-1.5"

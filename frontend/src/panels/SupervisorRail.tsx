@@ -1,7 +1,9 @@
+import DeliveryComposer from './DeliveryComposer'
 import { useStore } from '../store'
 
 export default function SupervisorRail() {
   const incidents = useStore((s) => s.incidents.length)
+  const composerOpen = useStore((s) => s.composerOpen)
 
   return (
     <aside
@@ -16,12 +18,13 @@ export default function SupervisorRail() {
         borderBottom: 0,
       }}
     >
+      {composerOpen ? <DeliveryComposer /> : null}
       <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--rule-soft)' }}>
         <h2 className="t-label" style={{ color: 'var(--graticule)' }}>
           AI SUPERVISOR
         </h2>
       </div>
-      <div className="flex-1 px-4 py-4">
+      <div className="no-scrollbar flex-1 overflow-y-auto px-4 py-4">
         {incidents === 0 ? (
           <p className="t-body" style={{ color: 'var(--muted)' }}>
             No open incidents. Airspace nominal.

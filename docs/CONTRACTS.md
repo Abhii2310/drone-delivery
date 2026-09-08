@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 6.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 7.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -27,8 +27,12 @@ Server → client only. Inbound frames are read and ignored.
 
 ```json
 {"t":"tick","clock":12.5,
- "d":[["D-01", 77.599, 12.9668, 110.0, 132.4, 15.7, 88.61, 3], ...]}
+ "d":[["D-01", 77.599, 12.9668, 110.0, 132.4, 15.7, 88.61, 3], ...],
+ "m":[["M-001","ENROUTE",41.2], ...]}
 ```
+
+`m` carries one row per active mission as `[mission_id, state, eta_s]`, so the ETA counts
+down at 2 Hz without any mission data entering React state.
 
 Row layout: `[id, lng, lat, alt_m, heading_deg, speed_mps, battery_pct, status_code]`
 
@@ -61,6 +65,7 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 | GET | `/health` | — | `{"ok":true}` | 0 |
 | GET | `/api/city` | — | city fixture, see below | 1 |
 | POST | `/api/reset` | — | the fresh `hello` message; also rebroadcast on `/ws` | 2 |
+| POST | `/api/missions` | `{type, payload_kind, priority, origin_hub_id, dest_id}` | the created `Mission`, or 400 with a reason | 7 |
 
 ### `GET /api/city`
 
@@ -148,3 +153,24 @@ Glass and interaction values from UI-SPEC 2.4 live as tokens in `index.css`
 
 Simulator note: a drone seeded with no route now reports `speed = 0.0`, so an IDLE strip does
 not show a cruise speed it is not flying at.
+
+## Missions (Step 7)
+
+`backend/routing.py` builds a graph from corridor vertices, snapping hubs and destinations to
+the nearest vertex within 500 m. `plan_route` is Dijkstra over that graph and rejects an edge
+that enters an active NO_FLY, TEMP_RESTRICTED, SCHOOL or EMERGENCY volume at the edge's
+altitude, that breaches a HOSPITAL ceiling, or that falls outside the drone's altitude band.
+`find_alternative_routes` re-plans while banning each winning corridor in turn.
+`evaluate_route` returns `length_m`, `eta_s`, `battery_cost_pct`, `zones_crossed`,
+`quiet_zone_seconds` and `min_sep_to_other_drones`, all deterministic, for Step 9's fact packet.
+
+`backend/missions.py` assigns a drone (available, unassigned, within payload capacity, above
+reserve plus margin; ranked by distance to the origin hub, then battery, then id), plans the
+route, and drives the lifecycle in the tick:
+`ENROUTE -> ARRIVING` within 100 m of the destination, `-> DELIVERED` on route completion,
+`-> RETURNING` on a freshly planned route home, `-> COMPLETE` at the hub with the drone IDLE.
+Each transition publishes `mission.created` or `mission.updated` carrying
+`{mission, drone, route, clock}`.
+
+Mission state constants: payload weights Medicine 2.4 kg, Medical sample 0.4 kg, Food 1.5 kg,
+Package 1.2 kg; capacity 3.0 kg; reserve floor 20%; cruise 15.0 m/s; arrival radius 100 m.
