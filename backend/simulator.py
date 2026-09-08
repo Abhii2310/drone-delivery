@@ -37,7 +37,9 @@ def seed(state: AppState) -> None:
                       payload_kg=payload, package_id=pkg, home_hub_id=hub_id,
                       health={"motors": 1.0, "comms": 1.0, "gps": 1.0})
         hub.drone_ids.append(did)
-        if cid is not None:
+        if cid is None:
+            drone.speed = 0.0
+        else:
             route = _round_trip(state, f"R-{did}", cid)
             state.routes[route.id] = route
             drone.route_id = route.id

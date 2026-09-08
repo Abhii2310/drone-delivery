@@ -27,6 +27,17 @@
   --t-instant: 90ms;  --t-quick: 180ms;  --t-standard: 320ms;  --t-cine: 1400ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in:  cubic-bezier(0.4, 0, 1, 1);
+  /* glass — UI-SPEC 2.4, literal values live here so nothing else hardcodes a colour */
+  --glass-rail-bg:  rgba(21, 34, 56, 0.82);
+  --glass-drawer-bg: rgba(26, 40, 66, 0.94);
+  --glass-border:   rgba(255, 255, 255, 0.06);
+  --glass-hilite:   rgba(255, 255, 255, 0.07);
+  --glass-shadow:   rgba(0, 0, 0, 0.45);
+  --hover-lift:     rgba(255, 255, 255, 0.03);
+  --select-tint:    rgba(91, 157, 217, 0.08);
+  --glow-critical:  rgba(224, 57, 139, 0.55);
+  --glow-nominal:   rgba(91, 157, 217, 0.32);
+
   /* type */
   --font-ui:   'Barlow Semi Condensed', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -51,3 +62,40 @@ body {
 .t-mono-lg { font: 500 18px/1.00 var(--font-mono); font-variant-numeric: tabular-nums; }
 .t-mono    { font: 400 12px/1.30 var(--font-mono); font-variant-numeric: tabular-nums; }
 .t-mono-sm { font: 400 10.5px/1.20 var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.glass-rail {
+  background: var(--glass-rail-bg);
+  backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hilite), 0 16px 40px var(--glass-shadow);
+}
+
+.strip:hover { background: var(--hover-lift); }
+.strip-selected { background: var(--select-tint); }
+.glow-selected { box-shadow: 0 0 10px -2px var(--glow-nominal); }
+
+:where(button, [tabindex]):focus-visible {
+  outline: 2px solid var(--nominal);
+  outline-offset: 2px;
+}
+
+.no-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+.no-scrollbar::-webkit-scrollbar-thumb { background: var(--rule); }
+.no-scrollbar::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* MapLibre's own chrome, pulled into the palette and under the 4px radius rule */
+.maplibregl-ctrl-attrib.maplibregl-compact,
+.maplibregl-ctrl-attrib-button,
+.maplibregl-ctrl-attrib-inner {
+  border-radius: var(--r-sm) !important;
+  background: var(--glass-rail-bg) !important;
+  color: var(--muted) !important;
+  font-family: var(--font-ui);
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a { color: var(--muted) !important; }
+.maplibregl-ctrl-bottom-right { z-index: 5; }

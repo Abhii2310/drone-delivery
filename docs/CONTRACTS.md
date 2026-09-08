@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 5.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 6.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -125,3 +125,26 @@ Full layer order, bottom to top: `zone-volume`, `zone-edge`, `corridor-tube`, `r
 Zone volumes extrude from a per-vertex base: each ring vertex carries `z = alt_min` and
 `getElevation` returns `alt_max - alt_min`. This was tested with a floating prism and renders
 correctly, so the ground-plus-floor-plane fallback was not needed.
+
+## Chrome and stores (Step 6)
+
+`frontend/src/store.ts` is the Zustand store for low-frequency state only: `incidents`,
+`decisions`, `missions`, `events`, `selectedDroneId`, `role`, `emergency`, `cameraMode`,
+`weather`, `aiEnabled`. Telemetry never enters it.
+
+`frontend/src/lib/fleet.ts` publishes one shared 4 Hz slice of the telemetry buffer through
+`useSyncExternalStore`. The 60 fps rAF render loop is untouched by it, and only the panels
+that subscribe re-render. `ingestFleetMeta(hello)` caches per-drone static fields
+(operator, priority, mission, package, home hub, payload) and exposes them as
+`window.__fleetMeta`.
+
+Chrome components, all floating over a map that never resizes:
+`chrome/StatusBar.tsx` (56 px), `panels/FleetRail.tsx` (292 px flight strips),
+`panels/SupervisorRail.tsx` (360 px), `panels/Timeline.tsx` (108 px, collapses to 32 px).
+
+Glass and interaction values from UI-SPEC 2.4 live as tokens in `index.css`
+(`--glass-rail-bg`, `--glass-border`, `--glass-hilite`, `--glass-shadow`, `--hover-lift`,
+`--select-tint`, `--glow-nominal`, `--glow-critical`) so no component hardcodes a colour.
+
+Simulator note: a drone seeded with no route now reports `speed = 0.0`, so an IDLE strip does
+not show a cruise speed it is not flying at.

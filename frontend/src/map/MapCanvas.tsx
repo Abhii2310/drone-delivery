@@ -4,6 +4,8 @@ import { MapboxOverlay } from '@deck.gl/mapbox'
 import { token } from '../lib/tokens'
 import { ingestHello, ingestTick } from '../lib/telemetry'
 import { bumpRevision, getCity, ingestCity, setZoneVisible } from '../lib/city'
+import { ingestFleetMeta } from '../lib/fleet'
+import { useStore } from '../store'
 import { startRender, stopRender } from '../lib/render'
 import { connect, disconnect, onHello, onTick } from '../lib/ws'
 
@@ -94,7 +96,9 @@ export default function MapCanvas() {
     map.addControl(overlay)
     const offHello = onHello((frame) => {
       ingestCity(frame)
+      ingestFleetMeta(frame)
       ingestHello(frame)
+      useStore.getState().applyHello(frame)
     })
     const offTick = onTick(ingestTick)
     startRender(overlay)
