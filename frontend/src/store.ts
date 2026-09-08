@@ -79,6 +79,17 @@ type Store = {
   paused: boolean
   paletteOpen: boolean
   pendingConfirm: 'approve' | 'emergency' | 'standdown' | null
+  verification: {
+    incident_id: string
+    drone_ids: string[]
+    separation_before_m: number
+    separation_after_m: number
+    required_sep_m: number
+    horizontal_m: number
+    vertical_gap_m: number
+    altitudes: Record<string, number>
+    maneuver?: string
+  } | null
   aiEnabled: boolean
   liveAi: boolean
   composerOpen: boolean
@@ -94,6 +105,7 @@ type Store = {
   setPaused: (p: boolean) => void
   togglePalette: () => void
   setPendingConfirm: (k: 'approve' | 'emergency' | 'standdown' | null) => void
+  setVerification: (v: Store['verification']) => void
   applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean; emergency?: Emergency; weather?: Weather; capabilities?: string[] }) => void
   pushEvent: (event: TimelineEvent) => void
   upsertMission: (mission: MissionRecord) => void
@@ -135,6 +147,7 @@ export const useStore = create<Store>((set) => ({
   paused: false,
   paletteOpen: false,
   pendingConfirm: null,
+  verification: null,
   aiEnabled: true,
   liveAi: false,
   composerOpen: false,
@@ -150,6 +163,7 @@ export const useStore = create<Store>((set) => ({
   setPaused: (paused) => set({ paused }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
   setPendingConfirm: (pendingConfirm) => set({ pendingConfirm }),
+  setVerification: (verification) => set({ verification }),
   applyHello: (frame) => set({ ready: true, weather: frame.weather ?? null, capabilities: frame.capabilities ?? [], emergency: frame.emergency ?? null, emergencyPhase: frame.emergency ? 9999 : 0, aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
   pushEvent: (event) =>
     set((s) => (s.events.some((e) => e.id === event.id) ? s : { events: [...s.events, event].slice(-120) })),

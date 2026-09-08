@@ -34,6 +34,9 @@ export default function EmergencyPanel() {
   const [kind, setKind] = useState<string>('FLOOD')
   const [zone, setZone] = useState<string>('ZONE-B')
   const [confirming, setConfirming] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const incidents = useStore((s) => s.incidents)
+  const critical = incidents.some((i) => i.severity === 'CRITICAL')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [payloads, setPayloads] = useState<string[]>([...PAYLOADS])
@@ -84,6 +87,7 @@ export default function EmergencyPanel() {
 
       {!emergency ? (
         <>
+          {expanded || confirming ? (
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="t-label" style={{ color: 'var(--graticule)' }}>
@@ -106,8 +110,24 @@ export default function EmergencyPanel() {
               </select>
             </label>
           </div>
+          ) : null}
 
-          {confirming ? (
+          {!expanded && !confirming ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="t-label w-full px-3 py-2 text-left"
+              style={{
+                background: 'transparent',
+                color: critical ? 'var(--emergency)' : 'var(--graticule)',
+                border: `1px solid ${critical ? 'var(--emergency)' : 'var(--rule)'}`,
+                borderRadius: 'var(--r-sm)',
+                cursor: 'pointer',
+              }}
+            >
+              {critical ? 'CRITICAL INCIDENT · DISASTER RESPONSE AVAILABLE' : 'DISASTER RESPONSE'}
+            </button>
+          ) : confirming ? (
             <div className="flex flex-col gap-2 px-3 py-2" style={{ border: '1px solid var(--emergency)', borderRadius: 'var(--r-sm)' }}>
               <p className="t-body" style={{ color: 'var(--paper)' }}>
                 Activate {kind.toLowerCase()} response over {zone}? Low and normal priority flights stand down.
@@ -140,14 +160,20 @@ export default function EmergencyPanel() {
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => { setConfirming(true); setPendingConfirm('emergency') }}
-              className="t-title w-full px-3 py-2"
-              style={{ background: 'transparent', color: 'var(--emergency)', border: '1px solid var(--emergency)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
-            >
-              Activate {kind.toLowerCase()} response
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setConfirming(true); setPendingConfirm('emergency') }}
+                className="t-title flex-1 px-3 py-2"
+                style={{ background: 'transparent', color: 'var(--emergency)', border: '1px solid var(--emergency)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
+              >
+                Activate {kind.toLowerCase()} response
+              </button>
+              <button type="button" onClick={() => setExpanded(false)} className="t-title px-3 py-2"
+                style={{ background: 'transparent', color: 'var(--graticule)', border: '1px solid var(--rule)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}>
+                Close
+              </button>
+            </div>
           )}
         </>
       ) : (

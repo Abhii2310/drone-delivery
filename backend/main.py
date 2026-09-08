@@ -254,7 +254,9 @@ async def approve_decision(decision_id: str, req: ApprovalRequest, role: str | N
                                           "actor": "safety", "reason": result["reason"],
                                           "clock": round(state.sim_clock, 2)})
         raise HTTPException(status_code=400, detail=result["reason"])
-    incident.state = "EXECUTED"
+    # collision incidents stay EXECUTING until the safety engine verifies the separation
+    if incident.state != "EXECUTING":
+        incident.state = "EXECUTED"
     bus.publish("incident.updated", {"incident": incident.model_dump(), "clock": round(state.sim_clock, 2)})
     return result
 

@@ -162,6 +162,7 @@ export default function MapCanvas() {
             .filter((p) => p.lng !== 0),
         )
         if (kind === 'incident.created') {
+          store.setVerification(null) // a new conflict supersedes the last verification
           const f = incident.facts as Record<string, number>
           store.pushEvent({ id: `${incident.id}-created`, clock, kind, text: `${incident.id} detected · ${incident.kind} ${incident.severity} · ${incident.drone_ids.join(' × ')} · ${f.min_sep_m} m in ${f.t_cpa_s} s` })
           if (conflict_ll) flyToIncident(incident, conflict_ll)
@@ -171,6 +172,26 @@ export default function MapCanvas() {
           store.pushEvent({ id: `${incident.id}-${incident.state}`, clock, kind, text: `${incident.id} ${incident.state.toLowerCase()}` })
           if (incident.state !== 'RESOLVED') store.clearDecision()
         }
+        return
+      }
+      if (kind === 'maneuver.started') {
+        useStore.getState().pushEvent({ id: `mnv-${payload.clock}`, clock: payload.clock, kind,
+          text: `Maneuver executing · ${payload.detail}` })
+        return
+      }
+      if (kind === 'separation.verified') {
+        const store = useStore.getState()
+        store.setVerification(payload)
+        store.pushEvent({ id: `sep-${payload.clock}`, clock: payload.clock, kind,
+          text: `Separation verified · ${payload.separation_before_m} m to ${payload.separation_after_m} m against a ${payload.required_sep_m} m minimum` })
+        return
+      }
+      if (kind === 'incident.resolved') {
+        const store = useStore.getState()
+        store.upsertIncident(payload.incident)
+        store.clearDecision()
+        store.pushEvent({ id: `res-${payload.incident_id}-${payload.clock}`, clock: payload.clock, kind,
+          text: `Conflict resolved · ${payload.drone_ids.join(' and ')} continuing` })
         return
       }
       if (kind === 'engineer.alerted') {

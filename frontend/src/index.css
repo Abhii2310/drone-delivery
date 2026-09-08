@@ -3,22 +3,22 @@
 @import 'tailwindcss';
 
 :root {
-  /* surfaces — navy, never tinted black */
-  --ink:          #0E1626;   /* app base, behind the map */
-  --panel:        #152238;   /* rail glass tint */
-  --panel-solid:  #1A2842;   /* drawers, modals */
-  --rule:         #2B3D5C;   /* hairlines */
-  --rule-soft:    #1F2E47;
+  /* surfaces — neutral graphite, not tinted blue. Operations rooms are grey, not navy. */
+  --ink:          #0B0D10;   /* app base, behind the map */
+  --panel:        #14171C;   /* rail tint */
+  --panel-solid:  #1A1E24;   /* drawers, bands, modals */
+  --rule:         #2C323B;   /* hairlines */
+  --rule-soft:    #1F242B;
   /* text */
-  --paper:        #EAF0F8;   /* primary */
-  --graticule:    #8195B4;   /* secondary */
-  --muted:        #56688A;   /* tertiary, disabled */
+  --paper:        #E7EAEE;   /* primary */
+  --graticule:    #949CA8;   /* secondary */
+  --muted:        #626B78;   /* tertiary, disabled */
   /* operational state — the ONLY saturated colours on screen */
-  --nominal:      #5B9DD9;   /* VFR blue — normal ops. calm. no glow. */
-  --advisory:     #F5A524;   /* beacon amber — warning */
-  --critical:     #E0398B;   /* sectional magenta — critical */
-  --emergency:    #FF5A3C;   /* city-wide emergency, chrome only */
-  --executed:     #3DD68C;   /* success. tiny. transient. */
+  --nominal:      #4E9FC4;   /* restrained cyan-blue — normal ops. calm. no glow. */
+  --advisory:     #D9A23F;   /* amber — warning */
+  --critical:     #D2503F;   /* red — critical */
+  --emergency:    #E0623A;   /* city-wide emergency, chrome only */
+  --executed:     #52A87B;   /* success. tiny. transient. */
   /* geometry */
   --r-sm: 2px;  --r-md: 3px;  --r-lg: 4px;   /* nothing rounder than 4px */
   --rail-l: 292px;  --rail-r: 360px;
@@ -32,15 +32,15 @@
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in:  cubic-bezier(0.4, 0, 1, 1);
   /* glass — UI-SPEC 2.4, literal values live here so nothing else hardcodes a colour */
-  --glass-rail-bg:  rgba(21, 34, 56, 0.82);
-  --glass-drawer-bg: rgba(26, 40, 66, 0.94);
+  --glass-rail-bg:  rgba(20, 23, 28, 0.86);
+  --glass-drawer-bg: rgba(26, 30, 36, 0.95);
   --glass-border:   rgba(255, 255, 255, 0.06);
   --glass-hilite:   rgba(255, 255, 255, 0.07);
   --glass-shadow:   rgba(0, 0, 0, 0.45);
   --hover-lift:     rgba(255, 255, 255, 0.03);
-  --select-tint:    rgba(91, 157, 217, 0.08);
-  --glow-critical:  rgba(224, 57, 139, 0.55);
-  --glow-nominal:   rgba(91, 157, 217, 0.32);
+  --select-tint:    rgba(78, 159, 196, 0.09);
+  --glow-critical:  rgba(210, 80, 63, 0.5);
+  --glow-nominal:   rgba(78, 159, 196, 0.3);
 
   /* type */
   --font-ui:   'Barlow Semi Condensed', system-ui, sans-serif;
@@ -154,11 +154,11 @@ body {
 /* Emergency chrome — UI-SPEC 2.10. One body class and a variable swap; no component
    is recoloured individually. */
 body.emergency {
-  --ink:     #1A1420;
-  --panel:   #241A26;
-  --nominal: #7C8FB0;
-  --glass-rail-bg: rgba(36, 26, 38, 0.86);
-  --select-tint:   rgba(124, 143, 176, 0.10);
+  --ink:     #16100D;
+  --panel:   #201713;
+  --nominal: #8A929E;
+  --glass-rail-bg: rgba(32, 23, 19, 0.88);
+  --select-tint:   rgba(138, 146, 158, 0.10);
 }
 
 body { transition: background-color 900ms var(--ease-out), color 900ms var(--ease-out); }

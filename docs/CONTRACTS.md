@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 15.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 16 (collision hero pass).
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -422,3 +422,33 @@ confirmation, `Space` pauses via `POST /api/pause`, `R` resets with confirmation
 
 Responsive: rails narrow at 1600, 1280 and 1024, and below 768 they are hidden, approval
 controls carry `.workstation-only`, and a band reads "Approvals require a workstation."
+
+## Predictive collision control (hero pass)
+
+The conflict lifecycle is now proven end to end, not assumed:
+
+`DETECTED -> INVESTIGATING -> AWAITING_APPROVAL -> EXECUTING -> RESOLVED`
+
+`apply_action` no longer resolves a collision incident. It sets `EXECUTING`, records the
+separation at detection and publishes `maneuver.started`. `safety_engine.verify_resolutions`
+runs on every 2 Hz check and only resolves the incident when the geometry proves it:
+
+- `cpa_separation(a, b, alt_a, alt_b)` computes the closest point of approach with no
+  thresholds applied, optionally at commanded altitudes — what the maneuver will actually
+  deliver rather than a mid-climb snapshot.
+- Verification waits for both drones to settle within 2 m of their commanded altitude.
+- It resolves only when the projected 3D separation clears the 15 m minimum, then publishes
+  `separation.verified` and `incident.resolved` with before, after, required, horizontal and
+  vertical components plus both altitudes.
+
+Deterministic across three consecutive runs: predicted 6.7 m against a 15 m minimum with
+13.2 s to CPA, resolved by descending one drone 25 m, verified at 27.4 m with a 25 m vertical
+gap. The other drone holds its corridor and altitude, and the remaining eight keep flying.
+
+Mission isolation was audited and is correct: assigning a mission changes exactly one drone's
+mission, route and position.
+
+Palette moved from navy to neutral graphite (`--ink #0B0D10`, `--panel #14171C`), with
+restrained cyan-blue nominal, amber advisory, red critical. Emergency controls are discreet in
+normal operations and escalate to "CRITICAL INCIDENT · DISASTER RESPONSE AVAILABLE" only when
+a critical incident is open.

@@ -25,7 +25,8 @@ RESERVE_PCT = 20.0
 SAFETY_K = 1.25
 
 CLEAR_CHECKS_TO_RESOLVE = 3
-OPEN_STATES = {"DETECTED", "INVESTIGATING", "AWAITING_APPROVAL"}
+OPEN_STATES = {"DETECTED", "INVESTIGATING", "AWAITING_APPROVAL", "EXECUTING"}
+VERIFY_GRACE_CHECKS = 2  # let the maneuver actually develop before judging it
 
 
 def velocity(d: Drone) -> tuple[float, float, float]:
@@ -54,6 +55,8 @@ def predict_collision(a: Drone, b: Drone) -> dict | None:
     return {
         "t_cpa_s": round(t, 1),
         "min_sep_m": round(sep, 1),
+        "sep_3d_m": round(hypot(sep, v_sep), 1),
+        "required_sep_m": R_MIN_M,
         "vertical_sep_m": round(v_sep, 1),
         "severity": severity,
         "risk_pct": max(1, min(99, risk)),
@@ -205,7 +208,66 @@ def _age_out(state: AppState, live_keys: set[str]) -> None:
             bus.publish("incident.updated", _wire(state, inc))
 
 
+def cpa_separation(a: Drone, b: Drone, alt_a: float | None = None, alt_b: float | None = None) -> dict:
+    """
+    Closest point of approach for a pair, with no thresholds applied. Optionally evaluated at
+    commanded altitudes, which is what a maneuver will actually deliver.
+    """
+    avx, avy, _ = velocity(a)
+    bvx, bvy, _ = velocity(b)
+    dp = (b.x - a.x, b.y - a.y)
+    dv = (bvx - avx, bvy - avy)
+    dv2 = dv[0] ** 2 + dv[1] ** 2
+    t = 0.0 if dv2 < 1e-6 else max(0.0, min(HORIZON_S, -(dp[0] * dv[0] + dp[1] * dv[1]) / dv2))
+    horizontal = hypot(dp[0] + dv[0] * t, dp[1] + dv[1] * t)
+    vertical = abs((alt_a if alt_a is not None else a.alt) - (alt_b if alt_b is not None else b.alt))
+    return {"t_cpa_s": round(t, 1), "horizontal_m": round(horizontal, 1),
+            "vertical_m": round(vertical, 1), "sep_3d_m": round(hypot(horizontal, vertical), 1)}
+
+
+def verify_resolutions(state: AppState) -> None:
+    """A maneuver is not a resolution. Re-run the geometry and prove the conflict cleared."""
+    for inc in list(state.incidents.values()):
+        if inc.state != "EXECUTING" or inc.kind != "COLLISION":
+            continue
+        inc.facts["verify_checks"] = inc.facts.get("verify_checks", 0) + 1
+        pair = [state.drones[i] for i in inc.drone_ids if i in state.drones]
+        if len(pair) < 2:
+            continue
+        a, b = pair
+        # judge the maneuver at its commanded altitudes, not mid-climb
+        commanded = cpa_separation(a, b, a.target_alt, b.target_alt)
+        inc.facts["separation_projected_m"] = commanded["sep_3d_m"]
+        inc.facts["separation_now_m"] = round(hypot(hypot(b.x - a.x, b.y - a.y), b.alt - a.alt), 1)
+        settled = all(abs(d.alt - d.target_alt) < 2.0 for d in (a, b))
+        if inc.facts["verify_checks"] < VERIFY_GRACE_CHECKS or not settled:
+            continue
+        if commanded["sep_3d_m"] < R_MIN_M:
+            continue
+        predicted = commanded["sep_3d_m"]
+        inc.state = "RESOLVED"
+        inc.facts["separation_after_m"] = predicted
+        payload = {
+            "incident_id": inc.id,
+            "drone_ids": inc.drone_ids,
+            "separation_before_m": inc.facts.get("separation_before_m"),
+            "separation_after_m": predicted,
+            "required_sep_m": R_MIN_M,
+            "horizontal_m": commanded["horizontal_m"],
+            "vertical_gap_m": commanded["vertical_m"],
+            "altitudes": {a.id: round(a.target_alt, 1), b.id: round(b.target_alt, 1)},
+            "maneuver": inc.facts.get("maneuver"),
+            "clock": round(state.sim_clock, 2),
+        }
+        log.info("separation verified %s: %.1f m -> %.1f m (required %.0f)",
+                 inc.id, inc.facts.get("separation_before_m") or -1, predicted, R_MIN_M)
+        bus.publish("separation.verified", payload)
+        bus.publish("incident.resolved", {"incident": inc.model_dump(), **payload})
+        bus.publish("incident.updated", _wire(state, inc))
+
+
 def run_checks(state: AppState) -> None:
+    verify_resolutions(state)
     live: set[str] = set()
     airborne = _airborne(state)
 

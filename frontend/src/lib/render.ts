@@ -10,14 +10,27 @@ import { tokenRgb, type Rgb } from './tokens'
 
 const QUADCOPTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
 <g fill="#fff">
-<path d="M64 14 L74 40 L64 35 L54 40 Z"/>
-<rect x="52" y="36" width="24" height="46" rx="7"/>
-<rect x="26" y="26" width="76" height="9" rx="4.5" transform="rotate(45 64 64)"/>
-<rect x="26" y="26" width="76" height="9" rx="4.5" transform="rotate(-45 64 64)"/>
-<circle cx="26" cy="26" r="15" fill-opacity="0.55"/>
-<circle cx="102" cy="26" r="15" fill-opacity="0.55"/>
-<circle cx="26" cy="102" r="15" fill-opacity="0.55"/>
-<circle cx="102" cy="102" r="15" fill-opacity="0.55"/>
+  <!-- rotor discs, faint, with a blade across each -->
+  <g fill-opacity="0.16">
+    <circle cx="30" cy="30" r="19"/><circle cx="98" cy="30" r="19"/>
+    <circle cx="30" cy="98" r="19"/><circle cx="98" cy="98" r="19"/>
+  </g>
+  <g fill-opacity="0.5">
+    <rect x="13" y="28.4" width="34" height="3.2" rx="1.6"/>
+    <rect x="81" y="28.4" width="34" height="3.2" rx="1.6"/>
+    <rect x="13" y="96.4" width="34" height="3.2" rx="1.6"/>
+    <rect x="81" y="96.4" width="34" height="3.2" rx="1.6"/>
+  </g>
+  <!-- booms -->
+  <rect x="26" y="61" width="76" height="6" rx="3" transform="rotate(45 64 64)"/>
+  <rect x="26" y="61" width="76" height="6" rx="3" transform="rotate(-45 64 64)"/>
+  <!-- fuselage: nose forward, tapered tail -->
+  <path d="M64 30 L76 52 L74 82 Q64 90 54 82 L52 52 Z"/>
+  <!-- canopy and nose light -->
+  <ellipse cx="64" cy="58" rx="7" ry="10" fill-opacity="0.45"/>
+  <circle cx="64" cy="36" r="4"/>
+  <!-- payload bay -->
+  <rect x="56" y="72" width="16" height="10" rx="3" fill-opacity="0.55"/>
 </g></svg>`
 
 const ICON = {

@@ -98,6 +98,8 @@ export default function SupervisorRail() {
   const capabilities = useStore((s) => s.capabilities)
   const pendingConfirm = useStore((s) => s.pendingConfirm)
   const setPendingConfirm = useStore((s) => s.setPendingConfirm)
+  const verification = useStore((s) => s.verification)
+  const setVerification = useStore((s) => s.setVerification)
   const selectAlternative = useStore((s) => s.selectAlternative)
   const setApplying = useStore((s) => s.setApplying)
   const [error, setError] = useState<string | null>(null)
@@ -187,6 +189,35 @@ export default function SupervisorRail() {
               animation: 'scan var(--t-scan) var(--ease-out) infinite',
             }}
           />
+        ) : null}
+
+        {verification ? (
+          <div className="mb-4 flex flex-col gap-2 px-3 py-3" style={{ border: '1px solid var(--executed)', borderRadius: 'var(--r-sm)' }}>
+            <div className="flex items-baseline justify-between">
+              <span className="t-label" style={{ color: 'var(--executed)' }}>
+                SEPARATION VERIFIED
+              </span>
+              <button type="button" onClick={() => setVerification(null)} className="t-label"
+                style={{ background: 'transparent', border: 0, color: 'var(--muted)', cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Metric label="BEFORE" value={`${verification.separation_before_m} m`} tone="var(--critical)" />
+              <Metric label="AFTER" value={`${verification.separation_after_m} m`} tone="var(--executed)" />
+              <Metric label="REQUIRED" value={`${verification.required_sep_m} m`} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Metric label="VERTICAL GAP" value={`${verification.vertical_gap_m} m`} />
+              <Metric label="HORIZONTAL" value={`${verification.horizontal_m} m`} />
+            </div>
+            <span className="t-mono-sm" style={{ color: 'var(--graticule)' }}>
+              {Object.entries(verification.altitudes).map(([id, a]) => `${id} ${a} m`).join(' · ')}
+            </span>
+            <span className="t-body" style={{ color: 'var(--paper)' }}>
+              Conflict resolved. Both missions continuing.
+            </span>
+          </div>
         ) : null}
 
         {emergency?.summary && phase >= 1200 ? (

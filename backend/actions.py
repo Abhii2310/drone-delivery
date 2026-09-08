@@ -154,6 +154,16 @@ def apply_action(state: AppState, action: Action, actor: str, incident_id: str |
         detail = f"{drone_id} holding for {HOLD_SECONDS:.0f} s"
 
     after = _snapshot(state, drone_id)
+    incident = state.incidents.get(incident_id or "")
+    if incident is not None and incident.kind == "COLLISION":
+        # the incident is not resolved yet: the safety engine must prove the separation
+        incident.state = "EXECUTING"
+        incident.facts["separation_before_m"] = incident.facts.get("sep_3d_m") or incident.facts.get("min_sep_m")
+        incident.facts["verify_checks"] = 0
+        incident.facts["maneuver"] = detail
+        bus.publish("maneuver.started", {"incident_id": incident.id, "action": action.model_dump(),
+                                         "detail": detail, "drone_id": drone_id,
+                                         "clock": round(state.sim_clock, 2)})
     audit.append(state, actor, action.kind, before, after, detail)
     payload = {"action": action.model_dump(), "actor": actor, "incident_id": incident_id,
                "detail": detail, "drone": simulator.drone_full(drone), "clock": round(state.sim_clock, 2)}
