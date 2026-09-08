@@ -104,7 +104,13 @@ export default function SupervisorRail() {
   const expanded = aiEnabled && (open.length > 0 || decision !== null)
 
   type Pad = { id: string; name: string; score: number; distance_m: number; safety_score: number; free: number; capacity: number; reason?: string }
-  const landing = (facts as unknown as { landing_options?: { ranked: Pad[]; rejected: Pad[]; max_reachable_m: number; battery_pct: number } } | null)?.landing_options ?? null
+  const rawLanding = (facts as unknown as { landing_options?: unknown } | null)?.landing_options
+  // a collision packet carries landing_options as a plain array; only the divert packet
+  // carries the {ranked, rejected} selection
+  const landing =
+    rawLanding && !Array.isArray(rawLanding) && Array.isArray((rawLanding as { ranked?: Pad[] }).ranked)
+      ? (rawLanding as { ranked: Pad[]; rejected: Pad[]; max_reachable_m: number; battery_pct: number })
+      : null
 
   const factRows = facts
     ? [
