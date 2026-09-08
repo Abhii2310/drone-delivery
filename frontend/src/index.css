@@ -139,3 +139,5 @@ body.emergency.emergency-frame::after { opacity: 1; }
 }
 
 .strip-paused { opacity: 0.4; filter: saturate(0.3); transition: opacity var(--t-standard) var(--ease-out); }
+
+@keyframes slide-in { from { transform: translateX(100%) } to { transform: none } }

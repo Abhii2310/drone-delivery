@@ -63,6 +63,8 @@ type Store = {
   selectedAlternative: number | null
   applying: boolean
   replaceableMission: string | null
+  drawerOpen: boolean
+  followDroneId: string | null
   missions: unknown[]
   events: TimelineEvent[]
   selectedDroneId: string | null
@@ -90,6 +92,9 @@ type Store = {
   selectAlternative: (index: number | null) => void
   setApplying: (applying: boolean) => void
   setReplaceable: (missionId: string | null) => void
+  openDrawer: (id: string) => void
+  closeDrawer: () => void
+  setFollow: (id: string | null) => void
   clearDecision: () => void
 }
 
@@ -109,6 +114,8 @@ export const useStore = create<Store>((set) => ({
   emergency: null,
   emergencyPhase: 0,
   replaceableMission: null,
+  drawerOpen: false,
+  followDroneId: null,
   cameraMode: 'CITY',
   weather: null,
   aiEnabled: true,
@@ -148,6 +155,9 @@ export const useStore = create<Store>((set) => ({
   selectAlternative: (selectedAlternative) => set({ selectedAlternative }),
   setApplying: (applying) => set({ applying }),
   setReplaceable: (replaceableMission) => set({ replaceableMission }),
+  openDrawer: (id) => set({ drawerOpen: true, selectedDroneId: id }),
+  closeDrawer: () => set({ drawerOpen: false }),
+  setFollow: (followDroneId) => set({ followDroneId, cameraMode: followDroneId ? 'DRONE' : 'CITY' }),
   clearDecision: () => set({ decision: null, facts: null, selectedAlternative: null, applying: false }),
   upsertMission: (mission) =>
     set((s) => {

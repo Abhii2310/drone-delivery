@@ -6,8 +6,8 @@ export const STATUS_NAMES = ['IDLE', 'CHARGING', 'MAINTENANCE', 'ENROUTE', 'HOLD
 export type StatusName = (typeof STATUS_NAMES)[number]
 export type Priority = 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW'
 
-export type DroneMeta = { id: string; operator_id: string; priority: Priority; mission_id: string | null; package_id: string | null; home_hub_id: string; payload_kg: number }
-export type FleetRow = { id: string; alt: number; battery: number; speed: number; heading: number; status: StatusName; meta: DroneMeta; missionState: string | null; etaS: number | null }
+export type DroneMeta = { id: string; operator_id: string; priority: Priority; mission_id: string | null; package_id: string | null; home_hub_id: string; payload_kg: number; health?: Record<string, number> }
+export type FleetRow = { id: string; alt: number; battery: number; speed: number; heading: number; lng: number; lat: number; status: StatusName; meta: DroneMeta; missionState: string | null; etaS: number | null }
 
 const FEED_HZ = 4
 
@@ -34,6 +34,8 @@ function tick(): void {
     battery: v.battery,
     speed: v.speed,
     heading: v.heading,
+    lng: v.lng,
+    lat: v.lat,
     status: STATUS_NAMES[v.status] ?? 'IDLE',
       meta: m ?? { id: v.id, operator_id: '', priority: 'NORMAL', mission_id: null, package_id: null, home_hub_id: '', payload_kg: 0 },
       missionState: row?.[1] ?? null,

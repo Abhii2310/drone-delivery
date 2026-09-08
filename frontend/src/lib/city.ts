@@ -86,6 +86,11 @@ const collect = (pick: 'active' | 'ghost'): RoutePath[] => {
   return [...ids].map((id) => routes.get(id)).filter((r): r is RoutePath => r !== undefined)
 }
 
+export const getRouteForDrone = (droneId: string): RoutePath | null => {
+  const link = droneRoutes.get(droneId)
+  return link?.active ? (routes.get(link.active) ?? null) : null
+}
+
 export const getActiveRoutes = (): RoutePath[] => collect('active')
 export const getGhostRoutes = (): RoutePath[] => collect('ghost')
 

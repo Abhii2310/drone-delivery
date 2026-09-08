@@ -10,6 +10,7 @@ import { getInterpolated } from '../lib/telemetry'
 import { useStore } from '../store'
 import { startRender, stopRender } from '../lib/render'
 import { connect, disconnect, onEvent, onHello, onTick } from '../lib/ws'
+import { enterDroneView, exitDroneView } from './FollowCam'
 
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
 // fixture centroid, computed from backend/city.py bbox
@@ -286,8 +287,47 @@ export default function MapCanvas() {
         text: `${mission.id} ${mission.state} · ${mission.drone_id ?? '--'} ${mission.origin_hub_id} → ${mission.dest_id}`,
       })
     })
-    startRender(overlay)
+    startRender(overlay, map)
     connect()
+
+    const onKey = (e: KeyboardEvent) => {
+      const store = useStore.getState()
+      if (e.target instanceof HTMLElement && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return
+      if (e.key === '1') {
+        store.setFollow(null)
+        exitDroneView(map)
+      } else if (e.key === '2') {
+        store.setCameraMode('INCIDENT')
+      } else if (e.key === '3') {
+        const id = store.followDroneId ?? store.selectedDroneId
+        const view = getInterpolated(performance.now()).find((d) => d.id === id)
+        if (view) {
+          store.setFollow(view.id)
+          enterDroneView(map, view)
+        }
+      } else if (e.key === 'Escape') {
+        if (store.followDroneId) {
+          store.setFollow(null)
+          exitDroneView(map)
+        } else {
+          store.closeDrawer()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+
+    let lastFollow: string | null = null
+    const unsubFollow = useStore.subscribe((s) => {
+      if (s.followDroneId === lastFollow) return
+      const previous = lastFollow
+      lastFollow = s.followDroneId
+      if (s.followDroneId) {
+        const view = getInterpolated(performance.now()).find((d) => d.id === s.followDroneId)
+        if (view) enterDroneView(map, view)
+      } else if (previous) {
+        exitDroneView(map)
+      }
+    })
 
     mapRef.current = map
     ;(window as unknown as { __map?: maplibregl.Map }).__map = map
@@ -296,6 +336,8 @@ export default function MapCanvas() {
       offHello()
       offTick()
       offEvent()
+      window.removeEventListener('keydown', onKey)
+      unsubFollow()
       stopRender()
       disconnect()
       map.remove()

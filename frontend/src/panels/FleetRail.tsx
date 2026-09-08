@@ -84,7 +84,9 @@ export default function FleetRail() {
   const incidents = useStore((s) => s.incidents)
   const emergency = useStore((s) => s.emergency)
   const phase = useStore((s) => s.emergencyPhase)
-  const selectDrone = useStore((s) => s.selectDrone)
+  const drawerOpen = useStore((s) => s.drawerOpen)
+  const openDrawer = useStore((s) => s.openDrawer)
+  const closeDrawer = useStore((s) => s.closeDrawer)
 
   const alerts = new Map<string, 'CRITICAL' | 'WARNING'>()
   for (const i of incidents) {
@@ -160,7 +162,7 @@ export default function FleetRail() {
               selected={row.id === selectedDroneId}
               alert={alerts.get(row.id) ?? null}
               paused={greyed.has(row.id)}
-              onSelect={() => selectDrone(row.id === selectedDroneId ? null : row.id)}
+              onSelect={() => (row.id === selectedDroneId && drawerOpen ? closeDrawer() : openDrawer(row.id))}
               innerRef={(el) => {
                 if (el) els.current.set(row.id, el)
                 else els.current.delete(row.id)

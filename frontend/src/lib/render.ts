@@ -2,6 +2,9 @@ import { IconLayer, LineLayer, ScatterplotLayer, TextLayer } from '@deck.gl/laye
 import type { MapboxOverlay } from '@deck.gl/mapbox'
 import { debug, getInterpolated, type DroneView } from './telemetry'
 import { getConflictPoints, getLandingPulse, type ConflictPoint, type LandingPulse } from './conflicts'
+import { updateChaseCam } from '../map/FollowCam'
+import { useStore } from '../store'
+import type maplibregl from 'maplibre-gl'
 import { buildAirspaceLayers } from './airspace'
 import { tokenRgb, type Rgb } from './tokens'
 
@@ -124,8 +127,9 @@ function buildLayers(drones: DroneView[], nowMs: number) {
 }
 
 let lastViews: DroneView[] = []
+let lastFrameMs = performance.now()
 
-export function startRender(overlay: MapboxOverlay): void {
+export function startRender(overlay: MapboxOverlay, map: maplibregl.Map): void {
   stopRender()
   fpsWindowStart = performance.now()
   frames = 0
@@ -138,6 +142,12 @@ export function startRender(overlay: MapboxOverlay): void {
       fpsWindowStart = now
     }
     lastViews = getInterpolated(now)
+    const followId = useStore.getState().followDroneId
+    if (followId) {
+      const target = lastViews.find((d) => d.id === followId)
+      if (target) updateChaseCam(map, target, Math.min(0.1, (now - lastFrameMs) / 1000))
+    }
+    lastFrameMs = now
     overlay.setProps({ layers: [...buildAirspaceLayers(), ...buildLayers(lastViews, now)] })
     frameId = requestAnimationFrame(loop)
   }

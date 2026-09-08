@@ -5,6 +5,8 @@ import EmergencyBand from './chrome/EmergencyBand'
 import FleetRail from './panels/FleetRail'
 import SupervisorRail from './panels/SupervisorRail'
 import Timeline from './panels/Timeline'
+import DroneDrawer from './panels/DroneDrawer'
+import DroneHud from './chrome/DroneHud'
 
 let renders = 0
 
@@ -19,6 +21,8 @@ export default function App() {
       <AlertBand />
       <FleetRail />
       <SupervisorRail />
+      <DroneHud />
+      <DroneDrawer />
       <Timeline />
     </>
   )

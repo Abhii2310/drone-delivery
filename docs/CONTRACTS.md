@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 12.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 13.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -329,3 +329,33 @@ divert executes. The engineer alert is its own timeline row carrying the enginee
 
 Routing: the corridor snap radius is 900 m so landing pads and hubs attach, and an unreachable
 point now returns None from `plan_route` instead of raising.
+
+## Drone view (Step 13)
+
+`frontend/src/map/FollowCam.ts` is driven from the same rAF loop as telemetry interpolation
+and uses `map.jumpTo`, never `easeTo`, so easing is not layered on interpolation. Damping is
+frame-rate independent (`alpha = 1 - exp(-k*dt)`, k=3.5 position, k=2.2 bearing) and bearing
+uses shortest-angle wrapping `((target - current + 540) % 360) - 180`. Preset is zoom 17.2,
+pitch 72. Entry is a single `flyTo` of 1200 ms; the damping never handles the transition.
+Under `prefers-reduced-motion` the pitch drops to 40 and bearing follow is disabled.
+
+One deviation, deliberate: the addendum describes the camera target as a point 160 m BEHIND
+the drone. MapLibre's `center` is the point the camera looks AT, not where it sits, so a
+centre behind the drone renders the drone ABOVE mid-screen and fills the frame with where it
+has been. The look-at point is therefore 160 m AHEAD along the heading, which puts the drone
+at 64% of frame height, in the lower third, with the route ahead filling the view. That is the
+effect the addendum asks for.
+
+`frontend/src/lib/profile.ts` samples a route into a cross-section and works out which zones
+it passes through, returning `points` and `bands` (zone id, kind, ceiling, floor, from/to
+distance). `ceilingAt` and `nextCeiling` drive the HUD advisory, and `progressAlong` places the
+marker. `panels/AltitudeProfile.tsx` renders it as inline SVG with each zone's restricted air
+shaded above its ceiling line.
+
+`panels/DroneDrawer.tsx` is 380 px of L2 glass sliding over the supervisor rail; the map never
+resizes. `chrome/DroneHud.tsx` is HTML and CSS only, with a heading tape, an altitude ladder
+carrying the current zone ceiling as a magenta line on the same scale, a battery ladder, a
+crosshair and the bottom strip plus advisory.
+
+Keyboard: `1` city, `2` incident, `3` drone view for the selected drone, `Esc` exits drone
+view or closes the drawer.
