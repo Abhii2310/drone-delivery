@@ -65,12 +65,16 @@ def trigger_collision(state: AppState) -> str:
     return f"{free[0].id} on C3 and {free[1].id} on C7 converging near Hospital 2"
 
 
-def _degrade(state: AppState, part: str, value: float) -> str:
+def _degrade(state: AppState, part: str, value: float, divert: bool = False) -> str:
     flying = _airborne(state)
     if not flying:
         return "no airborne drone"
-    drone = flying[0]
+    # prefer a drone actually carrying a mission, so a replacement has something to take over
+    drone = next((d for d in flying if d.mission_id is not None), flying[0])
     drone.health[part] = value
+    if divert:
+        # a physical failure, not a decision: the airframe is degraded and holds for a ruling
+        drone.status = "DIVERTING"
     return f"{drone.id} {part} at {value:.0%}"
 
 
@@ -83,9 +87,9 @@ def run(state: AppState, name: str) -> tuple[str | None, str | None]:
     elif name == "GPS_FAILURE":
         detail = _degrade(state, "gps", 0.2)
     elif name == "COMMS_LOSS":
-        detail = _degrade(state, "comms", 0.0)
+        detail = _degrade(state, "comms", 0.0, divert=True)
     elif name == "MOTOR_FAILURE":
-        detail = _degrade(state, "motors", 0.3)
+        detail = _degrade(state, "motors", 0.3, divert=True)
     elif name == "LOW_BATTERY":
         flying = _airborne(state)
         if not flying:

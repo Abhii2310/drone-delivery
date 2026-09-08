@@ -1,3 +1,4 @@
+import bus
 from geo import bearing, dist, point_along, polyline_length, to_ll
 from models import Drone, DroneStatus, Route
 from state import AppState
@@ -77,6 +78,9 @@ def _place(drone: Drone, route: Route) -> None:
 def tick(state: AppState, dt: float) -> None:
     state.sim_clock += dt
     for drone in state.drones.values():
+        if drone.status == "LANDING" and drone.route_id is not None:
+            _land(state, drone, dt)
+            continue
         if drone.status != "ENROUTE" or drone.route_id is None:
             continue
         route = state.routes[drone.route_id]
@@ -100,6 +104,31 @@ def tick(state: AppState, dt: float) -> None:
         if drone.mission_id is not None and drone.mission_id in state.missions:
             remaining = route.total_length_m - drone.route_progress_m
             state.missions[drone.mission_id].eta_s = remaining / drone.speed if drone.speed > 0 else None
+
+
+def _land(state: AppState, drone: Drone, dt: float) -> None:
+    route = state.routes[drone.route_id or ""]
+    remaining = route.total_length_m - drone.route_progress_m
+    if remaining > 1.0:
+        drone.route_progress_m = min(route.total_length_m, drone.route_progress_m + drone.speed * dt)
+        _place(drone, route)
+        drone.alt = max(0.0, drone.alt - CLIMB_RATE * dt) if remaining < 200 else drone.alt
+        drone.battery = max(0.0, drone.battery - (DRAIN_BASE + DRAIN_PER_KG * drone.payload_kg) * dt)
+        return
+    if drone.alt > 0.5:
+        drone.alt = max(0.0, drone.alt - CLIMB_RATE * dt)
+        drone.speed = 0.0
+        return
+    drone.status = "LANDED"
+    drone.speed = 0.0
+    drone.alt = 0.0
+    drone.target_alt = 0.0
+    drone.battery = max(0.0, drone.battery - DRAIN_LANDING)
+    pad = state.landing_zones.get(drone.landing_zone_id or "")
+    if pad is not None:
+        pad.occupied = min(pad.capacity, pad.occupied + 1)
+    bus.publish("drone.landed", {"drone": drone_full(drone), "landing_zone_id": drone.landing_zone_id,
+                                 "occupied": pad.occupied if pad else None, "clock": round(state.sim_clock, 2)})
 
 
 def status_code(status: DroneStatus) -> int:

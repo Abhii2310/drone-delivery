@@ -14,7 +14,7 @@ log = logging.getLogger("skyguard.actions")
 
 HOLD_SECONDS = 20.0
 RESERVE_PCT = 20.0
-IMPLEMENTED = {"REROUTE", "HOLD", "ALTITUDE_CHANGE"}
+IMPLEMENTED = {"REROUTE", "HOLD", "ALTITUDE_CHANGE", "DIVERT_LAND"}
 
 
 def _snapshot(state: AppState, drone_id: str) -> dict:
@@ -105,6 +105,37 @@ def apply_action(state: AppState, action: Action, actor: str, incident_id: str |
         drone.target_alt = joined.waypoints[-1][2]
         drone.status = "ENROUTE"
         detail = f"{drone_id} rerouted via {'+'.join(route.corridor_ids) or 'direct'}, {joined.total_length_m:.0f} m"
+    elif action.kind == "DIVERT_LAND":
+        pad = state.landing_zones.get(str(action.params.get("landing_zone_id")))
+        if pad is None:
+            return {"ok": False, "reason": f"unknown landing zone {action.params.get('landing_zone_id')}"}
+        if pad.permission != "APPROVED":
+            reason = f"{pad.name} permission is {pad.permission.lower()}, not approved"
+            audit.append(state, actor, "DIVERT_REJECTED", before, before, reason)
+            return {"ok": False, "reason": reason}
+        if pad.occupied >= pad.capacity:
+            reason = f"{pad.name} is at capacity, {pad.occupied}/{pad.capacity}"
+            audit.append(state, actor, "DIVERT_REJECTED", before, before, reason)
+            return {"ok": False, "reason": reason}
+        route = routing.plan_route(state, (drone.x, drone.y), (pad.x, pad.y), f"R-LAND-{drone.id}",
+                                   created_by="divert", priority=drone.priority)
+        if route is None:
+            reason = f"no legal route from {drone.id} to {pad.name}"
+            audit.append(state, actor, "DIVERT_REJECTED", before, before, reason)
+            return {"ok": False, "reason": reason}
+        state.routes[route.id] = route
+        drone.previous_route_id = drone.route_id
+        drone.route_id = route.id
+        drone.route_progress_m = 0.0
+        drone.target_alt = 30.0  # ramps down on approach; the simulator flies it to the deck
+        drone.status = "LANDING"
+        drone.landing_zone_id = pad.id
+        hub = state.hubs[drone.home_hub_id]
+        bus.publish("engineer.alerted", {"drone_id": drone.id, "hub_id": hub.id, "engineer_id": hub.engineer_id,
+                                         "landing_zone_id": pad.id, "landing_zone_name": pad.name,
+                                         "reason": f"{drone.id} diverting to {pad.name}",
+                                         "clock": round(state.sim_clock, 2)})
+        detail = f"{drone_id} diverting to {pad.name}, {route.total_length_m:.0f} m"
     elif action.kind == "ALTITUDE_CHANGE":
         target = float(action.params.get("target_alt", drone.alt))
         for zone in state.zones.values():

@@ -5,6 +5,7 @@ from shapely.geometry import LineString, Point
 import actions
 import bus
 import city
+import missions
 import routing
 import simulator
 from geo import dist
@@ -17,7 +18,13 @@ KINDS = ("FLOOD", "FIRE", "EARTHQUAKE", "LANDSLIDE")
 RETURN_HOME_BATTERY_PCT = 40.0
 PAUSE_PRIORITIES = {"LOW", "NORMAL"}
 RANK = {"CRITICAL": 0, "HIGH": 1, "NORMAL": 2, "LOW": 3}
-DEPARTURE_SPACING_M = 90.0  # keeps a stream well outside the 40 m warning radius
+DEPARTURE_SPACING_M = 90.0
+DRAIN_CRUISE = 0.055
+SAFETY_K = 1.25
+RESERVE_PCT = 20.0
+ROOFTOP_MAX_KG = 1.5
+MEDICAL_PAYLOADS = {"MEDICINE", "Medicine", "Medical sample"}
+PERMISSION_WEIGHT = {"APPROVED": 1.0, "CONDITIONAL": 0.4, "DENIED": 0.0}  # keeps a stream well outside the 40 m warning radius
 RESCUE_PAYLOADS = {"MEDICINE": 2.4, "WATER": 2.8, "FOOD": 1.5, "EQUIPMENT": 2.0}
 EMERGENCY_CORRIDORS = ("C3", "C7")  # the two that serve the emergency hub
 
@@ -207,3 +214,107 @@ def create_rescue(state: AppState, zone_id: str, payloads: list[str]) -> tuple[d
     bus.publish("rescue.dispatched", {"zone_id": zone_id, "dest_id": dest.id, "assignments": assignments,
                                       "clock": round(state.sim_clock, 2)})
     return {"zone_id": zone_id, "dest_id": dest.id, "assignments": assignments}, None
+
+
+def _pad_compatible(pad, drone) -> bool:
+    if pad.type == "BUILDING":
+        return drone.payload_kg <= ROOFTOP_MAX_KG
+    if pad.type == "HOSPITAL":
+        return (drone.package_id or "").upper().find("MED") >= 0 or drone.priority == "CRITICAL"
+    return True
+
+
+def select_landing_zone(state: AppState, drone) -> dict:
+    """Hard filters first, each rejection carrying its reason; then the weighted score."""
+    speed = drone.speed if drone.speed > 0 else 15.0
+    usable = max(0.0, drone.battery - RESERVE_PCT)
+    max_reach = usable * speed / (SAFETY_K * DRAIN_CRUISE) if usable > 0 else 0.0
+    blocking = [z for z in state.zones.values()
+                if routing.zone_active(state, z) and z.kind in {"NO_FLY", "EMERGENCY"}]
+
+    survivors, rejected = [], []
+    for pad in state.landing_zones.values():
+        gap = dist((drone.x, drone.y), (pad.x, pad.y))
+        entry = {"id": pad.id, "name": pad.name, "type": pad.type, "permission": pad.permission,
+                 "capacity": pad.capacity, "occupied": pad.occupied, "free": pad.capacity - pad.occupied,
+                 "safety_score": pad.safety_score, "distance_m": round(gap)}
+        if pad.permission == "DENIED":
+            rejected.append({**entry, "reason": "permission denied"})
+            continue
+        if pad.permission == "CONDITIONAL":
+            rejected.append({**entry, "reason": "conditional permission"})
+            continue
+        if pad.occupied >= pad.capacity:
+            rejected.append({**entry, "reason": "at capacity"})
+            continue
+        if gap > max_reach:
+            rejected.append({**entry, "reason": f"beyond battery range, {round(gap)} m against {round(max_reach)} m reachable"})
+            continue
+        inside = next((z.name for z in blocking if z.polygon.contains(Point(pad.x, pad.y))), None)
+        if inside is not None:
+            rejected.append({**entry, "reason": f"inside restricted airspace, {inside}"})
+            continue
+        if not _pad_compatible(pad, drone):
+            rejected.append({**entry, "reason": "incompatible pad type"})
+            continue
+        survivors.append(entry)
+
+    for entry in survivors:
+        proximity = 1 - min(1.0, max(0.0, entry["distance_m"] / max_reach)) if max_reach else 0.0
+        headroom = entry["free"] / entry["capacity"] if entry["capacity"] else 0.0
+        entry["proximity"] = round(proximity, 3)
+        entry["capacity_headroom"] = round(headroom, 3)
+        entry["score"] = round(0.45 * proximity + 0.25 * entry["safety_score"]
+                               + 0.20 * headroom + 0.10 * PERMISSION_WEIGHT[entry["permission"]], 4)
+    survivors.sort(key=lambda e: (-e["score"], e["id"]))
+    rejected.sort(key=lambda e: e["distance_m"])
+    return {"ranked": survivors, "rejected": rejected,
+            "max_reachable_m": round(max_reach), "battery_pct": round(drone.battery, 1)}
+
+
+def dispatch_replacement(state: AppState, mission_id: str) -> tuple[dict | None, str | None]:
+    mission = state.missions.get(mission_id)
+    if mission is None:
+        return None, f"unknown mission {mission_id}"
+    grounded = state.drones.get(mission.drone_id or "")
+    pool = [d for d in state.drones.values()
+            if d.status in {"IDLE", "CHARGING"} and d.mission_id is None and d.battery > 35.0]
+    if not pool:
+        return None, "no replacement drone available"
+    dest = state.destinations[mission.dest_id]
+    pool.sort(key=lambda d: (round(dist((d.x, d.y), (dest.x, dest.y))), -d.battery, d.id))
+    drone = pool[0]
+
+    hub = state.hubs[drone.home_hub_id]
+    route = routing.plan_route(state, (hub.x, hub.y), (dest.x, dest.y), f"RPL-{mission_id}",
+                               created_by=mission_id, priority=mission.priority)
+    if route is None:
+        return None, f"no legal route from {drone.home_hub_id} to {mission.dest_id}"
+    state.routes[route.id] = route
+
+    if grounded is not None:
+        grounded.mission_id = None
+    drone.x, drone.y = hub.x, hub.y
+    drone.mission_id = mission.id
+    drone.priority = mission.priority
+    drone.payload_kg = missions.PAYLOAD_KG.get(mission.payload_kind, RESCUE_PAYLOADS.get(mission.payload_kind, 1.0))
+    drone.package_id = f"PKG-{mission.id}-R"
+    drone.route_id = route.id
+    drone.route_progress_m = 0.0
+    drone.target_alt = route.waypoints[0][2]
+    drone.speed = 15.0
+    drone.status = "ENROUTE"
+    mission.drone_id = drone.id
+    mission.state = "ENROUTE"
+    mission.eta_s = route.total_length_m / 15.0
+    simulator.depart(drone)
+
+    log.info("replacement %s takes over %s from %s", drone.id, mission.id, grounded.id if grounded else "--")
+    payload = {"mission_id": mission.id, "replacement": drone.id,
+               "replaced": grounded.id if grounded else None,
+               "drone": simulator.drone_full(drone), "route": simulator.route_full(route),
+               "clock": round(state.sim_clock, 2)}
+    bus.publish("replacement.dispatched", payload)
+    bus.publish("mission.updated", {"mission": mission.model_dump(), "drone": simulator.drone_full(drone),
+                                    "route": simulator.route_full(route), "clock": round(state.sim_clock, 2)})
+    return payload, None

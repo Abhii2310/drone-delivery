@@ -62,6 +62,7 @@ type Store = {
   facts: FactPacket | null
   selectedAlternative: number | null
   applying: boolean
+  replaceableMission: string | null
   missions: unknown[]
   events: TimelineEvent[]
   selectedDroneId: string | null
@@ -88,6 +89,7 @@ type Store = {
   setDecision: (decision: DecisionRecord | null) => void
   selectAlternative: (index: number | null) => void
   setApplying: (applying: boolean) => void
+  setReplaceable: (missionId: string | null) => void
   clearDecision: () => void
 }
 
@@ -106,6 +108,7 @@ export const useStore = create<Store>((set) => ({
   role: 'GOVERNMENT',
   emergency: null,
   emergencyPhase: 0,
+  replaceableMission: null,
   cameraMode: 'CITY',
   weather: null,
   aiEnabled: true,
@@ -134,12 +137,17 @@ export const useStore = create<Store>((set) => ({
       decisions: decision ? [...s.decisions.filter((d) => d.id !== decision.id), decision] : s.decisions,
       selectedAlternative: decision
         ? decision.alternatives.findIndex(
-            (a) => a.kind === decision.recommended_action.kind && a.params.route_id === decision.recommended_action.params.route_id,
+            (a) =>
+              a.kind === decision.recommended_action.kind &&
+              a.params.route_id === decision.recommended_action.params.route_id &&
+              a.params.landing_zone_id === decision.recommended_action.params.landing_zone_id &&
+              a.params.target_alt === decision.recommended_action.params.target_alt,
           )
         : null,
     })),
   selectAlternative: (selectedAlternative) => set({ selectedAlternative }),
   setApplying: (applying) => set({ applying }),
+  setReplaceable: (replaceableMission) => set({ replaceableMission }),
   clearDecision: () => set({ decision: null, facts: null, selectedAlternative: null, applying: false }),
   upsertMission: (mission) =>
     set((s) => {

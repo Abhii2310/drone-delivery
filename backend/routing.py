@@ -1,4 +1,5 @@
 import heapq
+import logging
 
 from shapely.geometry import LineString, Point
 
@@ -6,11 +7,12 @@ from geo import dist, polyline_length
 from models import Drone, Route, Zone
 from state import AppState
 
-SNAP_M = 500.0
+SNAP_M = 900.0  # landing pads and hubs sit well off the corridor centrelines
 EXTRA_LINKS = 3
 LINK_RADIUS_M = 1500.0
 DRAIN_BASE = 0.040
 DRAIN_PER_KG = 0.0085
+log = logging.getLogger("skyguard.routing")
 BLOCKING = {"NO_FLY", "TEMP_RESTRICTED", "SCHOOL", "EMERGENCY"}
 
 Node = tuple[float, float]
@@ -97,7 +99,11 @@ def plan_route(
     priority: str = "NORMAL",
 ) -> Route | None:
     graph, alt_of = build_graph(state)
-    start, goal = _attach(graph, alt_of, from_xy), _attach(graph, alt_of, to_xy)
+    try:
+        start, goal = _attach(graph, alt_of, from_xy), _attach(graph, alt_of, to_xy)
+    except ValueError as exc:  # unreachable from the corridor network; the caller decides
+        log.info("plan_route: %s", exc)
+        return None
 
     best: dict[Node, float] = {start: 0.0}
     came: dict[Node, tuple[Node, str, float]] = {}

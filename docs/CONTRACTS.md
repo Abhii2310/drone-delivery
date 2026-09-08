@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 11.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 12.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -74,6 +74,7 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 | POST | `/api/emergency/activate` | `{kind, zone_id}` | the emergency record with its summary, or 400 | 11 |
 | POST | `/api/emergency/deactivate` | — | `{ok}`, or 400 when none is active | 11 |
 | POST | `/api/missions/rescue` | `{zone_id, payloads[]}` | `{zone_id, dest_id, assignments}` | 11 |
+| POST | `/api/missions/{id}/dispatch-replacement` | — | `{mission_id, replacement, replaced, drone, route}` | 12 |
 
 ### `GET /api/city`
 
@@ -296,3 +297,35 @@ Frontend: the chrome transformation is one `body.emergency` class plus a token s
 no component is recoloured individually. The activation sequence is driven by
 `store.emergencyPhase`, stepped through 200, 400, 600, 800, 1000 and 1200 ms to match
 UI-SPEC 2.10. Deactivation reverses in 600 ms.
+
+## Emergency landing (Step 12)
+
+`emergency.select_landing_zone(drone)` applies the hard filters in order, recording a reason
+for every rejection: `permission denied`, `conditional permission`, `at capacity`,
+`beyond battery range, N m against M m reachable`, `inside restricted airspace, <zone>`,
+`incompatible pad type`. Reachable range is
+`(battery - 20) x speed / (1.25 x 0.055)`. Survivors are then scored
+`0.45*proximity + 0.25*safety_score + 0.20*capacity_headroom + 0.10*permission_weight`, with
+`proximity = 1 - clamp(dist / max_reachable, 0, 1)`. It returns both `ranked` and `rejected`.
+
+MOTOR_FAILURE and COMMS_LOSS degrade health and set the drone DIVERTING, preferring a drone
+that is carrying a mission so a replacement has something to take over. The safety engine
+raises HEALTH_DEGRADED, the supervisor investigates with the full landing selection in
+`landing_options`, and recommends `DIVERT_LAND` requiring approval.
+
+`apply_action` DIVERT_LAND re-checks permission and capacity, plans the landing route, sets
+`target_alt` to 30 m and status LANDING, and publishes `engineer.alerted` with the hub's
+engineer id. The simulator flies the approach, descends inside the last 200 m, sets LANDED,
+increments the pad's `occupied` and publishes `drone.landed`.
+
+`dispatch_replacement(mission_id)` picks the next best available drone by distance to the
+destination, then battery, then id, moves the mission onto it and publishes
+`replacement.dispatched`.
+
+Frontend: the supervisor rail lists ranked candidates with score, distance, safety and
+headroom, and below them the rejected candidates greyed with their reason. The chosen pad
+pulses on the map as a `landing-pulse` layer. A "Dispatch replacement" action appears once the
+divert executes. The engineer alert is its own timeline row carrying the engineer's name.
+
+Routing: the corridor snap radius is 900 m so landing pads and hubs attach, and an unreachable
+point now returns None from `plan_route` instead of raising.

@@ -5,7 +5,7 @@ import { token } from '../lib/tokens'
 import { ingestHello, ingestTick } from '../lib/telemetry'
 import { bumpRevision, getCity, ingestCity, ingestDroneRoute, refreshCity, setZoneVisible } from '../lib/city'
 import { ingestFleetMeta, updateDroneMeta } from '../lib/fleet'
-import { setConflictPoints } from '../lib/conflicts'
+import { setConflictPoints, setLandingPulse } from '../lib/conflicts'
 import { getInterpolated } from '../lib/telemetry'
 import { useStore } from '../store'
 import { startRender, stopRender } from '../lib/render'
@@ -165,6 +165,25 @@ export default function MapCanvas() {
           store.pushEvent({ id: `${incident.id}-${incident.state}`, clock, kind, text: `${incident.id} ${incident.state.toLowerCase()}` })
           if (incident.state !== 'RESOLVED') store.clearDecision()
         }
+        return
+      }
+      if (kind === 'engineer.alerted') {
+        useStore.getState().pushEvent({ id: `eng-${payload.clock}-${payload.drone_id}`, clock: payload.clock, kind,
+          text: `ENGINEER ALERT · ${payload.engineer_id} at ${payload.hub_id} · ${payload.reason}` })
+        const pad = getCity()?.pads.find((p) => p.id === payload.landing_zone_id)
+        if (pad) setLandingPulse({ id: pad.id, lng: pad.at[0], lat: pad.at[1] })
+        const drone = useStore.getState().missions.find((m) => (m as { drone_id?: string }).drone_id === payload.drone_id)
+        if (drone) useStore.getState().setReplaceable((drone as { id: string }).id)
+        return
+      }
+      if (kind === 'drone.landed') {
+        useStore.getState().pushEvent({ id: `landed-${payload.clock}-${payload.drone.id}`, clock: payload.clock, kind,
+          text: `${payload.drone.id} landed at ${payload.landing_zone_id} · pad now ${payload.occupied} occupied` })
+        return
+      }
+      if (kind === 'replacement.dispatched') {
+        useStore.getState().pushEvent({ id: `rpl-${payload.clock}`, clock: payload.clock, kind,
+          text: `replacement ${payload.replacement} takes over ${payload.mission_id} from ${payload.replaced}` })
         return
       }
       if (kind === 'emergency.changed') {

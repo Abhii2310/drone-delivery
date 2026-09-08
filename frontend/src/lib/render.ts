@@ -1,7 +1,7 @@
 import { IconLayer, LineLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 import type { MapboxOverlay } from '@deck.gl/mapbox'
 import { debug, getInterpolated, type DroneView } from './telemetry'
-import { getConflictPoints, type ConflictPoint } from './conflicts'
+import { getConflictPoints, getLandingPulse, type ConflictPoint, type LandingPulse } from './conflicts'
 import { buildAirspaceLayers } from './airspace'
 import { tokenRgb, type Rgb } from './tokens'
 
@@ -45,7 +45,22 @@ function buildLayers(drones: DroneView[], nowMs: number) {
   const conflicts = getConflictPoints()
   const pulse = 0.5 + 0.5 * Math.sin((nowMs / 1400) * Math.PI * 2)
 
+  const landing = getLandingPulse()
+
   return [
+    new ScatterplotLayer<LandingPulse>({
+      id: 'landing-pulse',
+      data: landing ? [landing] : [],
+      getPosition: (p) => [p.lng, p.lat, 2],
+      getRadius: () => 55 + pulse * 45,
+      radiusUnits: 'meters',
+      getFillColor: withAlpha(tokenRgb('--executed'), 30 + pulse * 60),
+      stroked: true,
+      getLineColor: withAlpha(tokenRgb('--executed'), 230),
+      getLineWidth: 2,
+      lineWidthUnits: 'pixels',
+      updateTriggers: { getRadius: pulse, getFillColor: pulse },
+    }),
     new ScatterplotLayer<ConflictPoint>({
       id: 'conflict-marker',
       data: conflicts,

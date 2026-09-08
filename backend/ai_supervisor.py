@@ -115,7 +115,42 @@ def _drone_facts(state: AppState, d) -> dict:
             "altitude_m": round(d.alt, 1), "operator": d.operator_id}
 
 
+def _divert_packet(state: AppState, incident: Incident) -> dict:
+    import emergency
+
+    drone = state.drones[incident.drone_ids[0]]
+    selection = emergency.select_landing_zone(state, drone)
+    alternatives = []
+    for pad in selection["ranked"][:3]:
+        alternatives.append({
+            "action": {"kind": "DIVERT_LAND", "drone_id": drone.id,
+                       "params": {"landing_zone_id": pad["id"], "landing_zone_name": pad["name"],
+                                  "score": pad["score"], "distance_m": pad["distance_m"],
+                                  "safety_score": pad["safety_score"], "risk_pct_after": 0,
+                                  "sla_delta_s": round(pad["distance_m"] / max(drone.speed, 1.0), 1),
+                                  "battery_delta_pct": round(0.055 * pad["distance_m"] / max(drone.speed, 1.0), 2),
+                                  "community_delta_pct": 0.0}},
+            "risk_pct_after": 0, "sla_delta_s": round(pad["distance_m"] / max(drone.speed, 1.0), 1),
+            "battery_delta_pct": round(0.055 * pad["distance_m"] / max(drone.speed, 1.0), 2),
+            "community_delta_pct": 0.0, "violates": [], "corridor_ids": [], "length_m": pad["distance_m"],
+            "landing_zone": pad,
+        })
+    return {
+        "incident": {"id": incident.id, "kind": incident.kind, "severity": incident.severity,
+                     "risk_pct": 90, "t_cpa_s": None, "min_sep_m": None, "vertical_sep_m": None,
+                     "part": incident.facts.get("part"), "value": incident.facts.get("value")},
+        "drones": [_drone_facts(state, drone)],
+        "yielding_drone": drone.id,
+        "alternatives": alternatives,
+        "landing_options": selection,
+        "active_policies": list(state.policies),
+        "hard_rules": HARD_RULES,
+    }
+
+
 def build_fact_packet(state: AppState, incident: Incident) -> dict:
+    if incident.kind == "HEALTH_DEGRADED":
+        return _divert_packet(state, incident)
     yielder, other = _participants(state, incident)
     current = state.routes.get(yielder.route_id or "")
     current_eval = routing.evaluate_route(state, yielder, current) if current else {}
@@ -175,6 +210,9 @@ def build_fact_packet(state: AppState, incident: Incident) -> dict:
 
 def _action_line(kind: str, who: str, where: str, params: dict, inc: dict, best: dict) -> str:
     drop = f"drops predicted risk from {inc['risk_pct']}% to {best['risk_pct_after']}%"
+    if kind == "DIVERT_LAND":
+        return (f"{params['landing_zone_name']} scores {params['score']:.2f}: {params['distance_m']} m away, "
+                f"safety {params['safety_score']}, and it is the highest-scoring pad that clears every hard filter.")
     if kind == "REROUTE":
         return f"Rerouting {who} via {where} {drop}."
     if kind == "ALTITUDE_CHANGE":
@@ -184,6 +222,8 @@ def _action_line(kind: str, who: str, where: str, params: dict, inc: dict, best:
 
 
 def _summary(kind: str, who: str, where: str, params: dict, best: dict) -> str:
+    if kind == "DIVERT_LAND":
+        return f"Divert {who} to {params['landing_zone_name']}"
     if kind == "REROUTE":
         return f"Reroute {who} via {where}"
     if kind == "ALTITUDE_CHANGE":
@@ -213,13 +253,23 @@ def mock_supervisor(facts: dict) -> Decision:
     kind = best["action"]["kind"]
     where = "+".join(best["corridor_ids"]) or "a direct leg"
     params = best["action"]["params"]
-    reasoning = [
+    if kind == "DIVERT_LAND":
+        opts = facts["landing_options"]
+        reasoning = [
+            f"{who} reports {inc.get('part')} at {float(inc.get('value') or 0):.0%}; the airframe cannot complete its mission.",
+            f"Battery {opts['battery_pct']}% gives {opts['max_reachable_m']} m of reachable range above the 20% reserve floor.",
+            f"{len(opts['rejected'])} candidate(s) failed the hard filters: "
+            + "; ".join(f"{r['id']} {r['reason']}" for r in opts["rejected"]) + ".",
+            _action_line(kind, who, where, params, inc, best),
+        ]
+    else:
+        reasoning = [
         f"{inc['kind'].title()} predicted between {who} and {other}: {inc['min_sep_m']} m at closest approach in {inc['t_cpa_s']} s, {inc['vertical_sep_m']} m vertical.",
         f"{who} carries the lower priority of the pair, so it yields under the rule that CRITICAL missions outrank NORMAL.",
         _action_line(kind, who, where, params, inc, best),
         f"Cost of the change: {best['sla_delta_s']:+.0f} s on schedule, {best['battery_delta_pct']:+.2f}% battery, {best['community_delta_pct']:+.1f} s over the quiet zone.",
         _rejection_line(ranked, best),
-    ]
+        ]
     summary = _summary(kind, who, where, params, best) + f" — risk {inc['risk_pct']}% to {best['risk_pct_after']}%"
 
     return Decision(
@@ -355,7 +405,7 @@ async def investigate(state: AppState, incident_id: str) -> None:
 
 def dispatch(state: AppState, incident: Incident) -> None:
     """Fire-and-forget. The tick loop must never await the supervisor."""
-    if not state.ai_enabled or incident.kind != "COLLISION" or incident.severity == "INFO":
+    if not state.ai_enabled or incident.kind not in {"COLLISION", "HEALTH_DEGRADED"} or incident.severity == "INFO":
         return
     try:
         asyncio.get_running_loop()

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import DeliveryComposer from './DeliveryComposer'
 import { useStore, type ActionRecord } from '../store'
+import { setLandingPulse } from '../lib/conflicts'
 
 const FACT_STAGGER_MS = 80
 const ALT_STAGGER_MS = 60
@@ -60,7 +61,9 @@ function Alternative({ action, index, selected, recommended, onSelect }: { actio
             ? `Reroute via ${corridors || 'direct'}`
             : action.kind === 'ALTITUDE_CHANGE'
               ? `${String(p.direction) === 'descend' ? 'Descend' : 'Climb'} ${num(p.offset_m)} m to ${num(p.target_alt)} m`
-              : `Hold ${num(p.seconds)} s`}
+              : action.kind === 'DIVERT_LAND'
+                ? `Divert to ${String(p.landing_zone_name)}`
+                : `Hold ${num(p.seconds)} s`}
         </span>
         {recommended ? (
           <span className="t-label" style={{ color: 'var(--advisory)' }}>
@@ -88,6 +91,8 @@ export default function SupervisorRail() {
   const aiEnabled = useStore((s) => s.aiEnabled)
   const emergency = useStore((s) => s.emergency)
   const phase = useStore((s) => s.emergencyPhase)
+  const replaceable = useStore((s) => s.replaceableMission)
+  const setReplaceable = useStore((s) => s.setReplaceable)
   const selectAlternative = useStore((s) => s.selectAlternative)
   const setApplying = useStore((s) => s.setApplying)
   const [error, setError] = useState<string | null>(null)
@@ -97,6 +102,9 @@ export default function SupervisorRail() {
   const open = incidents.filter((i) => i.severity !== 'INFO')
   const investigating = open.some((i) => i.state === 'INVESTIGATING' || i.state === 'DETECTED')
   const expanded = aiEnabled && (open.length > 0 || decision !== null)
+
+  type Pad = { id: string; name: string; score: number; distance_m: number; safety_score: number; free: number; capacity: number; reason?: string }
+  const landing = (facts as unknown as { landing_options?: { ranked: Pad[]; rejected: Pad[]; max_reachable_m: number; battery_pct: number } } | null)?.landing_options ?? null
 
   const factRows = facts
     ? [
@@ -241,6 +249,39 @@ export default function SupervisorRail() {
                 </p>
               ))}
             </div>
+            {landing ? (
+              <div className="flex flex-col gap-2">
+                <span className="t-label" style={{ color: 'var(--graticule)' }}>
+                  LANDING CANDIDATES · {landing.battery_pct}% BATTERY, {landing.max_reachable_m} m REACHABLE
+                </span>
+                {landing.ranked.map((p, i) => (
+                  <div key={p.id} className="flex items-baseline justify-between px-2 py-1"
+                    style={{ border: `1px solid ${i === 0 ? 'var(--executed)' : 'var(--rule-soft)'}`, borderRadius: 'var(--r-sm)' }}>
+                    <span className="t-body" style={{ color: 'var(--paper)' }}>
+                      {i + 1}. {p.name}
+                    </span>
+                    <span className="t-mono-sm" style={{ color: 'var(--graticule)' }}>
+                      {p.score.toFixed(2)} · {p.distance_m} m · safety {p.safety_score} · {p.free}/{p.capacity}
+                    </span>
+                  </div>
+                ))}
+                <span className="t-label pt-1" style={{ color: 'var(--muted)' }}>
+                  REJECTED CANDIDATES
+                </span>
+                {landing.rejected.map((p) => (
+                  <div key={p.id} className="flex items-baseline justify-between px-2 py-1"
+                    style={{ border: '1px dashed var(--rule-soft)', borderRadius: 'var(--r-sm)', opacity: 0.55 }}>
+                    <span className="t-body" style={{ color: 'var(--muted)' }}>
+                      {p.name}
+                    </span>
+                    <span className="t-mono-sm" style={{ color: 'var(--muted)' }}>
+                      {p.reason}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-2">
               <span className="t-label" style={{ color: 'var(--graticule)' }}>
                 ALTERNATIVES
@@ -253,7 +294,9 @@ export default function SupervisorRail() {
                   selected={selected === i}
                   recommended={
                     a.kind === decision.recommended_action.kind &&
-                    a.params.route_id === decision.recommended_action.params.route_id
+                    a.params.route_id === decision.recommended_action.params.route_id &&
+                    a.params.landing_zone_id === decision.recommended_action.params.landing_zone_id &&
+                    a.params.target_alt === decision.recommended_action.params.target_alt
                   }
                   onSelect={() => selectAlternative(i)}
                 />
@@ -268,6 +311,23 @@ export default function SupervisorRail() {
           </p>
         ) : null}
       </div>
+
+      {replaceable ? (
+        <div className="px-4 py-3" style={{ borderTop: '1px solid var(--rule-soft)' }}>
+          <button
+            type="button"
+            onClick={async () => {
+              await fetch(`/api/missions/${replaceable}/dispatch-replacement`, { method: 'POST' })
+              setReplaceable(null)
+              setLandingPulse(null)
+            }}
+            className="t-title w-full px-3 py-2"
+            style={{ background: 'transparent', color: 'var(--nominal)', border: '1px solid var(--nominal)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
+          >
+            Dispatch replacement for {replaceable}
+          </button>
+        </div>
+      ) : null}
 
       {aiEnabled ? (
       <div className="flex gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--rule-soft)' }}>

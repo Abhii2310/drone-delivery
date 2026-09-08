@@ -137,6 +137,14 @@ async def deactivate_emergency() -> dict:
     return result
 
 
+@app.post("/api/missions/{mission_id}/dispatch-replacement")
+async def dispatch_replacement(mission_id: str) -> dict:
+    result, error = emergency.dispatch_replacement(state, mission_id)
+    if error is not None or result is None:
+        raise HTTPException(status_code=400, detail=error or "could not dispatch a replacement")
+    return result
+
+
 @app.post("/api/missions/rescue")
 async def post_rescue(req: RescueRequest) -> dict:
     result, error = emergency.create_rescue(state, req.zone_id, req.payloads)
