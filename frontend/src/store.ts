@@ -78,6 +78,7 @@ type Store = {
   ready: boolean
   paused: boolean
   paletteOpen: boolean
+  photoreal: boolean
   pendingConfirm: 'approve' | 'emergency' | 'standdown' | null
   verification: {
     incident_id: string
@@ -104,6 +105,7 @@ type Store = {
   setConnection: (c: { state: 'connecting' | 'open' | 'lost'; attempt: number }) => void
   setPaused: (p: boolean) => void
   togglePalette: () => void
+  setPhotoreal: (on: boolean) => void
   setPendingConfirm: (k: 'approve' | 'emergency' | 'standdown' | null) => void
   setVerification: (v: Store['verification']) => void
   applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean; emergency?: Emergency; weather?: Weather; capabilities?: string[] }) => void
@@ -146,6 +148,7 @@ export const useStore = create<Store>((set) => ({
   ready: false,
   paused: false,
   paletteOpen: false,
+  photoreal: localStorage.getItem('sky.photoreal') === '1',
   pendingConfirm: null,
   verification: null,
   aiEnabled: true,
@@ -162,6 +165,10 @@ export const useStore = create<Store>((set) => ({
   setConnection: (connection) => set({ connection }),
   setPaused: (paused) => set({ paused }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
+  setPhotoreal: (photoreal) => {
+    localStorage.setItem('sky.photoreal', photoreal ? '1' : '0')
+    set({ photoreal })
+  },
   setPendingConfirm: (pendingConfirm) => set({ pendingConfirm }),
   setVerification: (verification) => set({ verification }),
   applyHello: (frame) => set({ ready: true, weather: frame.weather ?? null, capabilities: frame.capabilities ?? [], emergency: frame.emergency ?? null, emergencyPhase: frame.emergency ? 9999 : 0, aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),

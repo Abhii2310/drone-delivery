@@ -452,3 +452,35 @@ Palette moved from navy to neutral graphite (`--ink #0B0D10`, `--panel #14171C`)
 restrained cyan-blue nominal, amber advisory, red critical. Emergency controls are discreet in
 normal operations and escalate to "CRITICAL INCIDENT · DISASTER RESPONSE AVAILABLE" only when
 a critical incident is open.
+
+## Photorealistic 3D city (optional)
+
+Cesium ion was evaluated against the requirement for a more realistic view. CesiumJS itself is
+not used: swapping engines would mean rewriting the deck.gl layer stack, the chase camera, the
+extruded airspace volumes and the HUD. Instead the ion token buys the thing that actually
+carries the realism — Google Photorealistic 3D Tiles, ion asset 2275207 — and deck.gl's own
+`Tile3DLayer` renders it inside the existing `MapboxOverlay`. The map engine, every layer and
+the camera are unchanged.
+
+- Token lives in `frontend/.env` as `VITE_CESIUM_ION_TOKEN`, which is gitignored.
+  `frontend/.env.example` documents it. Without a token the toggle does not render.
+- `lib/photoreal.ts` resolves the ion endpoint, moves the Google API key into an
+  `X-GOOG-API-KEY` header and preflights the tileset root, so a spent quota reports itself once
+  instead of through deck's per-frame retry.
+- Google references its tiles to the ellipsoid, so the ground under the city fixture arrives
+  910 m up. Each tile's `cartographicOrigin` is lowered by that amount in `onTileLoad`, which
+  puts the imagery on the same z = 0 ground every other layer assumes.
+- The tileset is capped at screen-space error 20 with memory-adjusted refinement, trading a
+  level of detail for frame budget.
+- While the imagery draws, the vector basemap layers are hidden and restored exactly — only
+  layers `applyDarkScheme` left visible come back, so the POI pins stay hidden. Verified by a
+  round trip: 20 hidden layers before, 20 after.
+- The toggle is `3D CITY` in the status bar, remembered in `localStorage`, and defaults off.
+  Graphite stays the operating basemap because corridors and drone glyphs read better on it;
+  photoreal is for briefing and for the demo.
+
+Known limits: the shared imagery quota returns HTTP 429 under rapid camera movement, which
+drops the layer and falls back to the graphite map rather than to a black screen. Frame rate
+under the tileset could not be measured in this environment — the automation pane throttles
+`requestAnimationFrame` to 1 fps with the tileset both on and off — so it needs one check on
+the demo machine.

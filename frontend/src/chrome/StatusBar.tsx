@@ -2,6 +2,7 @@ import { useFleet } from '../lib/fleet'
 import { useStore } from '../store'
 import RolePicker from './RolePicker'
 import ResetControl from './ResetControl'
+import { photorealConfigured } from '../lib/photoreal'
 
 const AIRBORNE = new Set(['ENROUTE', 'HOLDING', 'DIVERTING', 'LANDING'])
 
@@ -28,6 +29,8 @@ export default function StatusBar() {
   const setAiEnabled = useStore((s) => s.setAiEnabled)
   const composerOpen = useStore((s) => s.composerOpen)
   const toggleComposer = useStore((s) => s.toggleComposer)
+  const photoreal = useStore((s) => s.photoreal)
+  const setPhotoreal = useStore((s) => s.setPhotoreal)
   const airborne = fleet.filter((d) => AIRBORNE.has(d.status)).length
 
   return (
@@ -104,6 +107,30 @@ export default function StatusBar() {
             AI {aiEnabled ? (liveAi ? 'LIVE' : 'MOCK') : 'OFF'}
           </span>
         </button>
+        {photorealConfigured && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={photoreal}
+            onClick={() => setPhotoreal(!photoreal)}
+            className="workstation-only flex items-center gap-1.5 px-2 py-1"
+            title="Photorealistic 3D city imagery"
+            style={{
+              background: 'transparent',
+              border: `1px solid ${photoreal ? 'var(--nominal)' : 'var(--rule)'}`,
+              borderRadius: 'var(--r-sm)',
+              cursor: 'pointer',
+            }}
+          >
+            <span
+              className="inline-block h-1.5 w-1.5"
+              style={{ borderRadius: 'var(--r-md)', background: photoreal ? 'var(--nominal)' : 'var(--muted)' }}
+            />
+            <span className="t-label" style={{ color: photoreal ? 'var(--nominal)' : 'var(--muted)' }}>
+              3D CITY
+            </span>
+          </button>
+        )}
         <span
           className="t-label px-2 py-1"
           style={{

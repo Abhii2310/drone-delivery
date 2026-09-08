@@ -6,6 +6,7 @@ import { updateChaseCam } from '../map/FollowCam'
 import { useStore } from '../store'
 import type maplibregl from 'maplibre-gl'
 import { buildAirspaceLayers } from './airspace'
+import { photorealLayers } from './photoreal'
 import { tokenRgb, type Rgb } from './tokens'
 
 const QUADCOPTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
@@ -52,7 +53,7 @@ let fps = 0
 export const getFps = () => fps
 export const getFrameCount = () => frames
 
-function buildLayers(drones: DroneView[], nowMs: number) {
+function buildLayers(drones: DroneView[], nowMs: number, photoreal: boolean) {
   const nominal = tokenRgb('--nominal')
   const shadow = withAlpha(tokenRgb('--ink'), 102)
   const tether = withAlpha(tokenRgb('--graticule'), 89)
@@ -92,7 +93,8 @@ function buildLayers(drones: DroneView[], nowMs: number) {
     }),
     new ScatterplotLayer<DroneView>({
       id: 'drone-shadow',
-      data: drones,
+      // over photoreal terrain a flat ground disc reads as a defect, not as a shadow
+      data: photoreal ? [] : drones,
       getPosition: (d) => [d.lng, d.lat, 0],
       getRadius: (d) => 7 + d.alt * 0.055,
       radiusUnits: 'meters',
@@ -161,7 +163,10 @@ export function startRender(overlay: MapboxOverlay, map: maplibregl.Map): void {
       if (target) updateChaseCam(map, target, Math.min(0.1, (now - lastFrameMs) / 1000))
     }
     lastFrameMs = now
-    overlay.setProps({ layers: [...buildAirspaceLayers(), ...buildLayers(lastViews, now)] })
+    const photoreal = useStore.getState().photoreal
+    overlay.setProps({
+      layers: [...photorealLayers(photoreal), ...buildAirspaceLayers(), ...buildLayers(lastViews, now, photoreal)],
+    })
     frameId = requestAnimationFrame(loop)
   }
   frameId = requestAnimationFrame(loop)

@@ -13,6 +13,7 @@ import { connect, disconnect, onEvent, onHello, onStatus, onTick } from '../lib/
 import { enterDroneView, exitDroneView } from './FollowCam'
 import { handleKey } from '../lib/keyboard'
 import { cinematic } from '../lib/cinematic'
+import { photorealAttribution, photorealConfigured, photorealFailure } from '../lib/photoreal'
 
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
 // fixture centroid, computed from backend/city.py bbox
@@ -339,6 +340,31 @@ export default function MapCanvas() {
       })
     window.addEventListener('keydown', onKey)
 
+    // the photoreal tileset covers the vector basemap completely; hiding it saves the
+    // draw rather than painting two cities on top of each other
+    let basemapHidden = false
+    // only the layers the dark scheme left showing are restored; turning everything back
+    // on would resurrect the POI pins and boundaries applyDarkScheme deliberately hid
+    let restorable: string[] = []
+    const setBasemap = (hidden: boolean) => {
+      if (hidden === basemapHidden || !map.isStyleLoaded()) return
+      if (hidden) {
+        restorable = map
+          .getStyle()
+          .layers.filter((l) => l.id !== 'background' && map.getLayoutProperty(l.id, 'visibility') !== 'none')
+          .map((l) => l.id)
+        for (const id of restorable) map.setLayoutProperty(id, 'visibility', 'none')
+      } else {
+        for (const id of restorable) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible')
+      }
+      basemapHidden = hidden
+    }
+    // the vector basemap comes back the moment the imagery stops drawing, so a spent
+    // quota degrades to the graphite map instead of to a black hole
+    const syncBasemap = () => setBasemap(useStore.getState().photoreal && !photorealFailure())
+    const basemapTimer = window.setInterval(syncBasemap, 1000)
+    const unsubPhotoreal = useStore.subscribe(syncBasemap)
+
     let lastFollow: string | null = null
     const unsubFollow = useStore.subscribe((s) => {
       if (s.followDroneId === lastFollow) return
@@ -362,6 +388,8 @@ export default function MapCanvas() {
       offStatus()
       window.removeEventListener('keydown', onKey)
       unsubFollow()
+      unsubPhotoreal()
+      clearInterval(basemapTimer)
       stopRender()
       disconnect()
       map.remove()
@@ -369,5 +397,18 @@ export default function MapCanvas() {
     }
   }, [])
 
-  return <div ref={host} className="fixed inset-0" />
+  const photoreal = useStore((s) => s.photoreal)
+  return (
+    <>
+      <div ref={host} className="fixed inset-0" />
+      {photoreal && photorealConfigured && (
+        <span
+          className="t-mono-sm fixed right-3 bottom-8 z-20"
+          style={{ color: photorealFailure() ? 'var(--advisory)' : 'var(--muted)', pointerEvents: 'none' }}
+        >
+          {photorealFailure() ? `3D imagery unavailable · ${photorealFailure()}` : `3D imagery ${photorealAttribution() || 'Google'}`}
+        </span>
+      )}
+    </>
+  )
 }
