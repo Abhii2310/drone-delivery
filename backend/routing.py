@@ -68,13 +68,16 @@ def _attach(graph: dict[Node, list[Edge]], alt_of: dict[Node, float], point: tup
     return key
 
 
-def edge_allowed(state: AppState, a: Node, b: Node, alt: float, alt_min: float, alt_max: float) -> bool:
+def edge_allowed(state: AppState, a: Node, b: Node, alt: float, alt_min: float, alt_max: float,
+                 priority: str = "NORMAL") -> bool:
     if alt < alt_min or alt > alt_max:
         return False
     seg = LineString([a, b])
     for zone in state.zones.values():
         if not zone_active(state, zone) or not seg.intersects(zone.polygon):
             continue
+        if zone.allowed_priorities and priority in zone.allowed_priorities:
+            continue  # sanctioned traffic, e.g. CRITICAL rescue into an emergency zone
         if zone.kind in BLOCKING and zone.alt_min <= alt <= zone.alt_max:
             return False
         if zone.kind == "HOSPITAL" and alt > zone.alt_max:
@@ -91,6 +94,7 @@ def plan_route(
     alt_min: float = 40.0,
     alt_max: float = 150.0,
     exclude_corridor_ids: frozenset[str] = frozenset(),
+    priority: str = "NORMAL",
 ) -> Route | None:
     graph, alt_of = build_graph(state)
     start, goal = _attach(graph, alt_of, from_xy), _attach(graph, alt_of, to_xy)
@@ -109,7 +113,7 @@ def plan_route(
         for nxt, step, corridor_id, alt in graph.get(node, []):
             if corridor_id and corridor_id in exclude_corridor_ids:
                 continue
-            if not edge_allowed(state, node, nxt, alt, alt_min, alt_max):
+            if not edge_allowed(state, node, nxt, alt, alt_min, alt_max, priority):
                 continue
             total = cost + step
             if total < best.get(nxt, float("inf")):

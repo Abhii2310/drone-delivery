@@ -68,6 +68,7 @@ FLOOD_ZONE_B_LL: list[LL] = [
 ]
 
 FLOOD_ZONE_B: Polygon = Polygon([to_xy(*p) for p in FLOOD_ZONE_B_LL])
+EMERGENCY_POLYGONS: dict[str, Polygon] = {"ZONE-B": FLOOD_ZONE_B}
 C3_C7_CONFLICT: tuple[float, float] = (0.0, 0.0)
 BBOX_M: tuple[float, float] = (0.0, 0.0)
 

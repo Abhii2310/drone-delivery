@@ -38,9 +38,8 @@ type RawCity = {
   landing_zones: { id: string; name: string; permission: string; ll: number[] }[]
 }
 
-export function ingestCity(frame: HelloFrame): void {
-  const raw = frame.city as RawCity
-  city = {
+function mapCity(raw: RawCity): City {
+  return {
     zones: raw.zones.map((z) => ({
       id: z.id,
       name: z.name,
@@ -63,6 +62,15 @@ export function ingestCity(frame: HelloFrame): void {
     destinations: raw.destinations.map((d) => ({ id: d.id, name: d.name, kind: d.kind, at: swap(d.ll) })),
     pads: raw.landing_zones.map((p) => ({ id: p.id, name: p.name, permission: p.permission, at: swap(p.ll) })),
   }
+}
+
+export function refreshCity(raw: unknown): void {
+  city = mapCity(raw as RawCity)
+  revision++
+}
+
+export function ingestCity(frame: HelloFrame): void {
+  city = mapCity(frame.city as RawCity)
   routes.clear()
   droneRoutes.clear()
   for (const r of frame.routes as { id: string; path: number[][] }[]) routes.set(r.id, { id: r.id, path: toPath(r.path) })

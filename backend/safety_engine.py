@@ -86,6 +86,11 @@ def candidate_pairs(drones: list[Drone]) -> list[tuple[Drone, Drone]]:
     return pairs
 
 
+def _sanctioned(zone, drone: Drone) -> bool:
+    """Traffic the zone explicitly admits, e.g. CRITICAL rescue into an emergency zone."""
+    return bool(zone.allowed_priorities) and drone.priority in zone.allowed_priorities
+
+
 def check_geofence(state: AppState, drone: Drone) -> list[str]:
     here = Point(drone.x, drone.y)
     return [
@@ -93,6 +98,7 @@ def check_geofence(state: AppState, drone: Drone) -> list[str]:
         for z in state.zones.values()
         if routing.zone_active(state, z)
         and z.kind in routing.BLOCKING
+        and not _sanctioned(z, drone)
         and z.polygon.contains(here)
         and z.alt_min <= drone.alt <= z.alt_max
     ]
@@ -107,7 +113,8 @@ def predict_geofence_entry(state: AppState, drone: Drone) -> tuple[str, float] |
     while walked < route.total_length_m:
         p = point_along(line, walked)
         for z in state.zones.values():
-            if routing.zone_active(state, z) and z.kind in routing.BLOCKING and z.polygon.contains(Point(p)):
+            if (routing.zone_active(state, z) and z.kind in routing.BLOCKING
+                    and not _sanctioned(z, drone) and z.polygon.contains(Point(p))):
                 return z.id, round((walked - drone.route_progress_m) / drone.speed, 1)
         walked += step
     return None

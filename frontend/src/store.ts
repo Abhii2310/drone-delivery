@@ -3,7 +3,24 @@ import { create } from 'zustand'
 export type Role = 'GOVERNMENT' | 'OPERATOR' | 'HOSPITAL' | 'ENGINEER'
 export type CameraMode = 'CITY' | 'INCIDENT' | 'DRONE'
 export type Weather = { wind_speed: number; wind_direction: number; visibility_m: number } | null
-export type Emergency = { kind: string; zone_id: string; since: number } | null
+export type EmergencySummary = {
+  affected: number
+  rerouted: number
+  returning: number
+  emergency_landing: number
+  paused: number
+  available_for_rescue: number
+  drone_ids: Record<string, string[]>
+}
+export type EmergencyState = {
+  kind: string
+  zone_id: string
+  since: number
+  corridor_ids: string[]
+  summary?: EmergencySummary
+  landing_zones?: Record<string, string | number | boolean>[]
+} | null
+export type Emergency = EmergencyState
 export type TimelineEvent = { id: string; clock: number; kind: string; text: string }
 export type ActionRecord = { kind: string; drone_id: string | null; params: Record<string, number | string | string[]> }
 export type DecisionRecord = {
@@ -50,6 +67,7 @@ type Store = {
   selectedDroneId: string | null
   role: Role
   emergency: Emergency
+  emergencyPhase: number
   cameraMode: CameraMode
   weather: Weather
   aiEnabled: boolean
@@ -60,7 +78,9 @@ type Store = {
   setCameraMode: (mode: CameraMode) => void
   setRole: (role: Role) => void
   setAiEnabled: (on: boolean) => void
-  applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean }) => void
+  setEmergency: (e: Emergency) => void
+  setEmergencyPhase: (ms: number) => void
+  applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean; emergency?: Emergency }) => void
   pushEvent: (event: TimelineEvent) => void
   upsertMission: (mission: MissionRecord) => void
   upsertIncident: (incident: IncidentRecord) => void
@@ -85,6 +105,7 @@ export const useStore = create<Store>((set) => ({
   selectedDroneId: null,
   role: 'GOVERNMENT',
   emergency: null,
+  emergencyPhase: 0,
   cameraMode: 'CITY',
   weather: null,
   aiEnabled: true,
@@ -95,7 +116,9 @@ export const useStore = create<Store>((set) => ({
   setCameraMode: (cameraMode) => set({ cameraMode }),
   setRole: (role) => set({ role }),
   setAiEnabled: (aiEnabled) => set({ aiEnabled }),
-  applyHello: (frame) => set({ aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
+  setEmergency: (emergency) => set({ emergency, emergencyPhase: emergency ? 0 : 0 }),
+  setEmergencyPhase: (emergencyPhase) => set({ emergencyPhase }),
+  applyHello: (frame) => set({ emergency: frame.emergency ?? null, emergencyPhase: frame.emergency ? 9999 : 0, aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
   pushEvent: (event) =>
     set((s) => (s.events.some((e) => e.id === event.id) ? s : { events: [...s.events, event].slice(-120) })),
   upsertIncident: (incident) =>

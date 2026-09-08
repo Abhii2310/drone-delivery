@@ -11,6 +11,7 @@ import actions
 import audit
 import bus
 import city
+import emergency
 import missions
 import safety_engine
 import scenarios
@@ -38,6 +39,9 @@ def hello() -> dict:
         "audit": audit.query(state, 50),
         "scenarios": scenarios.NAMES,
         "ai_enabled": state.ai_enabled,
+        "emergency": state.emergency,
+        "disaster_kinds": list(emergency.KINDS),
+        "rescue_payloads": sorted(emergency.RESCUE_PAYLOADS),
         "live_ai": os.environ.get("USE_LIVE_AI", "false").lower() in {"1", "true", "yes"},
     }
 
@@ -105,6 +109,40 @@ async def post_mission(req: MissionRequest) -> dict:
     if error is not None or mission is None:
         raise HTTPException(status_code=400, detail=error or "mission could not be created")
     return mission.model_dump()
+
+
+class EmergencyRequest(BaseModel):
+    kind: str = "FLOOD"
+    zone_id: str = "ZONE-B"
+
+
+class RescueRequest(BaseModel):
+    zone_id: str = "ZONE-B"
+    payloads: list[str] = ["MEDICINE", "WATER", "FOOD", "EQUIPMENT"]
+
+
+@app.post("/api/emergency/activate")
+async def activate_emergency(req: EmergencyRequest) -> dict:
+    result, error = emergency.activate(state, req.kind, req.zone_id)
+    if error is not None or result is None:
+        raise HTTPException(status_code=400, detail=error or "could not activate")
+    return result
+
+
+@app.post("/api/emergency/deactivate")
+async def deactivate_emergency() -> dict:
+    result, error = emergency.deactivate(state)
+    if error is not None:
+        raise HTTPException(status_code=400, detail=error)
+    return result
+
+
+@app.post("/api/missions/rescue")
+async def post_rescue(req: RescueRequest) -> dict:
+    result, error = emergency.create_rescue(state, req.zone_id, req.payloads)
+    if error is not None or result is None:
+        raise HTTPException(status_code=400, detail=error or "could not dispatch rescue")
+    return result
 
 
 class AiToggle(BaseModel):

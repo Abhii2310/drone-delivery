@@ -31,6 +31,8 @@ def validate_route(state: AppState, drone_id: str, route: Route) -> str | None:
         for zone in state.zones.values():
             if not routing.zone_active(state, zone) or not seg.intersects(zone.polygon):
                 continue
+            if zone.allowed_priorities and drone.priority in zone.allowed_priorities:
+                continue
             if zone.kind == "NO_FLY" and zone.alt_min <= alt <= zone.alt_max:
                 return f"corridor enters {zone.name} at {alt:.0f} m"
             if zone.kind in routing.BLOCKING and zone.alt_min <= alt <= zone.alt_max:

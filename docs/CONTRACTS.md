@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 10.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 11.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -71,6 +71,9 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 | POST | `/api/decisions/{id}/reject` | `{actor}` | `{ok, detail}` | 9 |
 | GET | `/api/audit` | `?limit` | `{events: [...]}` | 9 |
 | POST | `/api/ai` | `{enabled}` | `{ai_enabled}`; also broadcasts `ai.changed` | 10 |
+| POST | `/api/emergency/activate` | `{kind, zone_id}` | the emergency record with its summary, or 400 | 11 |
+| POST | `/api/emergency/deactivate` | — | `{ok}`, or 400 when none is active | 11 |
+| POST | `/api/missions/rescue` | `{zone_id, payloads[]}` | `{zone_id, dest_id, assignments}` | 11 |
 
 ### `GET /api/city`
 
@@ -268,3 +271,28 @@ visible in 3D. Alternatives are ordered altitude, two reroutes, hold, capped at 
 appears and the camera still flies, but no investigation runs and the rail reads
 "AI Supervisor disabled. Raw safety alert only." with no approval control. Reset restores it
 to true.
+
+## Emergency operations (Step 11)
+
+`backend/emergency.py::activate` runs BUILD-PLAN 13's seven steps in order, publishing an
+`emergency.step` event at each so the UI can narrate itself: mark the zone EMERGENCY and open
+the emergency corridors (C3, C7); pause LOW and NORMAL missions to HOLDING, sending those
+under 40% battery home instead; re-rank the mission queue by priority; release the emergency
+hub; recompute every affected route; surface landing zones inside and near the polygon with
+live capacity; emit the summary. Every mutation goes through `apply_action` — nothing is
+mutated directly. The summary `{affected, rerouted, returning, emergency_landing, paused,
+available_for_rescue}` is counted from state and carries the drone ids behind each number.
+
+Only FLOOD is implemented; FIRE, EARTHQUAKE and LANDSLIDE are enum values and return 400.
+
+The emergency zone is created with `allowed_priorities: ["CRITICAL"]`. Routing, the hard-rule
+gate in `apply_action`, and both geofence checks all honour that field, so rescue traffic may
+enter the flood zone while everything else is kept out. Rescue departures from one hub are
+spaced 90 m apart along the route so a group dispatch does not stack drones on top of each
+other.
+
+Frontend: the chrome transformation is one `body.emergency` class plus a token swap in
+`index.css` (`--ink` #1A1420, `--panel` #241A26, `--nominal` #7C8FB0) and a `::after` frame;
+no component is recoloured individually. The activation sequence is driven by
+`store.emergencyPhase`, stepped through 200, 400, 600, 800, 1000 and 1200 ms to match
+UI-SPEC 2.10. Deactivation reverses in 600 ms.

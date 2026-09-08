@@ -103,3 +103,39 @@ body {
 @keyframes scan { 0% { transform: translateY(0); opacity: 0.9 } 100% { transform: translateY(340px); opacity: 0 } }
 @keyframes fade-in { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 @keyframes scale-in { from { transform: scale(0.98) } to { transform: scale(1) } }
+
+/* Emergency chrome — UI-SPEC 2.10. One body class and a variable swap; no component
+   is recoloured individually. */
+body.emergency {
+  --ink:     #1A1420;
+  --panel:   #241A26;
+  --nominal: #7C8FB0;
+  --glass-rail-bg: rgba(36, 26, 38, 0.86);
+  --select-tint:   rgba(124, 143, 176, 0.10);
+}
+
+body { transition: background-color 900ms var(--ease-out), color 900ms var(--ease-out); }
+
+body.emergency::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  border: 2px solid var(--emergency);
+  box-shadow: inset 0 0 80px -30px rgba(255, 90, 60, 0.5);
+  opacity: 0;
+  transition: opacity var(--t-standard) var(--ease-out);
+}
+body.emergency.emergency-frame::after { opacity: 1; }
+
+.hazard-hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--emergency) 0 10px,
+    transparent 10px 22px
+  );
+  opacity: 0.22;
+}
+
+.strip-paused { opacity: 0.4; filter: saturate(0.3); transition: opacity var(--t-standard) var(--ease-out); }

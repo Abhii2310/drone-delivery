@@ -13,6 +13,7 @@ import {
   type ZoneKind,
 } from './city'
 import { tokenRgb, type Rgb } from './tokens'
+import { useStore } from '../store'
 
 const withAlpha = (rgb: Rgb, a: number): [number, number, number, number] => [rgb[0], rgb[1], rgb[2], a]
 
@@ -42,13 +43,17 @@ function ringPath(ring: [number, number][], alt: number): [number, number, numbe
   return closed.map(([lng, lat]) => [lng, lat, alt])
 }
 
-let cache: { revision: number; layers: Layer[] } | null = null
+let cache: { revision: number; rise: number; layers: Layer[] } | null = null
 
 export function buildAirspaceLayers(): Layer[] {
   const revision = getRevision()
   const city = getCity()
   if (!city) return []
-  if (cache && cache.revision === revision) return cache.layers
+  const { emergency, emergencyPhase } = useStore.getState()
+  // the flood prism grows out of the ground over 600ms from the t=400 mark
+  const rise = !emergency ? 1 : emergencyPhase >= 1000 ? 1 : Math.max(0, Math.min(1, (emergencyPhase - 400) / 600))
+  const riseKey = Math.round(rise * 20)
+  if (cache && cache.revision === revision && cache.rise === riseKey) return cache.layers
 
   const zones = visibleZones()
   const graticule = tokenRgb('--graticule')
@@ -68,7 +73,7 @@ export function buildAirspaceLayers(): Layer[] {
       data: zones,
       extruded: true,
       getPolygon: (z) => z.ring.map(([lng, lat]): [number, number, number] => [lng, lat, z.alt_min]),
-      getElevation: (z) => z.alt_max - z.alt_min,
+      getElevation: (z) => (z.kind === 'EMERGENCY' ? (z.alt_max - z.alt_min) * rise : z.alt_max - z.alt_min),
       getFillColor: (z) => withAlpha(zoneColour(z.kind), FILL_ALPHA),
       material: false,
     }),
@@ -84,7 +89,12 @@ export function buildAirspaceLayers(): Layer[] {
       id: 'corridor-tube',
       data: city.corridors,
       getPath: (c: { path: [number, number, number][] }) => c.path,
-      getColor: withAlpha(graticule, 77), // 30%
+      getColor: (c: { id: string }) =>
+        !emergency
+          ? withAlpha(graticule, 77) // 30%
+          : emergency.corridor_ids.includes(c.id)
+            ? withAlpha(tokenRgb('--emergency'), 220) // illuminated
+            : withAlpha(graticule, 19), // dimmed to 25% of nominal
       getWidth: 8,
       widthUnits: 'meters',
       widthMinPixels: 1,
@@ -153,6 +163,6 @@ export function buildAirspaceLayers(): Layer[] {
     }),
   ]
 
-  cache = { revision, layers }
+  cache = { revision, rise: riseKey, layers }
   return layers
 }

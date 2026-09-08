@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import { token } from '../lib/tokens'
 import { ingestHello, ingestTick } from '../lib/telemetry'
-import { bumpRevision, getCity, ingestCity, ingestDroneRoute, setZoneVisible } from '../lib/city'
+import { bumpRevision, getCity, ingestCity, ingestDroneRoute, refreshCity, setZoneVisible } from '../lib/city'
 import { ingestFleetMeta, updateDroneMeta } from '../lib/fleet'
 import { setConflictPoints } from '../lib/conflicts'
 import { getInterpolated } from '../lib/telemetry'
@@ -165,6 +165,45 @@ export default function MapCanvas() {
           store.pushEvent({ id: `${incident.id}-${incident.state}`, clock, kind, text: `${incident.id} ${incident.state.toLowerCase()}` })
           if (incident.state !== 'RESOLVED') store.clearDecision()
         }
+        return
+      }
+      if (kind === 'emergency.changed') {
+        const store = useStore.getState()
+        const em = payload.emergency
+        store.setEmergency(em)
+        const body = document.body
+        if (em) {
+          // UI-SPEC 2.10 activation sequence, cinematic, once
+          body.classList.add('emergency')                                        // t=0
+          setTimeout(() => body.classList.add('emergency-frame'), 180)           // t=180
+          setTimeout(() => store.setEmergencyPhase(200), 200)                    // t=200 colour crossfade
+          setTimeout(async () => {                                               // t=400 polygon rises
+            const raw = await (await fetch('/api/city')).json()
+            refreshCity(raw)
+            store.setEmergencyPhase(400)
+          }, 400)
+          setTimeout(() => { store.setEmergencyPhase(600); bumpRevision() }, 600) // t=600 corridors
+          setTimeout(() => store.setEmergencyPhase(800), 800)                     // t=800 strips grey out
+          setTimeout(() => store.setEmergencyPhase(1000), 1000)                   // t=1000 rescue header
+          setTimeout(() => store.setEmergencyPhase(1200), 1200)                   // t=1200 summary
+          store.pushEvent({ id: `emg-on-${payload.clock}`, clock: payload.clock, kind, text: `${em.kind} response active · ${em.zone_id}` })
+        } else {
+          body.classList.remove('emergency-frame')
+          setTimeout(() => body.classList.remove('emergency'), 600)
+          store.setEmergencyPhase(0)
+          fetch('/api/city').then((r) => r.json()).then((raw) => { refreshCity(raw); bumpRevision() })
+          store.pushEvent({ id: `emg-off-${payload.clock}`, clock: payload.clock, kind, text: 'emergency stood down' })
+        }
+        return
+      }
+      if (kind === 'emergency.step') {
+        useStore.getState().pushEvent({ id: `emg-step-${payload.step}-${payload.clock}`, clock: payload.clock, kind,
+          text: `emergency step ${payload.step} · ${payload.name}` })
+        return
+      }
+      if (kind === 'rescue.dispatched') {
+        useStore.getState().pushEvent({ id: `rescue-${payload.clock}`, clock: payload.clock, kind,
+          text: `rescue dispatched to ${payload.zone_id} · ${Object.entries(payload.assignments).map(([p, d]) => `${p}:${d}`).join(' ')}` })
         return
       }
       if (kind === 'ai.changed') {

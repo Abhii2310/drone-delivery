@@ -86,6 +86,8 @@ export default function SupervisorRail() {
   const selected = useStore((s) => s.selectedAlternative)
   const applying = useStore((s) => s.applying)
   const aiEnabled = useStore((s) => s.aiEnabled)
+  const emergency = useStore((s) => s.emergency)
+  const phase = useStore((s) => s.emergencyPhase)
   const selectAlternative = useStore((s) => s.selectAlternative)
   const setApplying = useStore((s) => s.setApplying)
   const [error, setError] = useState<string | null>(null)
@@ -166,6 +168,22 @@ export default function SupervisorRail() {
               animation: 'scan 1.6s var(--ease-out) infinite',
             }}
           />
+        ) : null}
+
+        {emergency?.summary && phase >= 1200 ? (
+          <div className="mb-4 flex flex-col gap-1 px-3 py-2" style={{ border: '1px solid var(--emergency)', borderRadius: 'var(--r-sm)' }}>
+            <span className="t-label" style={{ color: 'var(--emergency)' }}>
+              {emergency.kind} · {emergency.zone_id}
+            </span>
+            <span className="t-body" style={{ color: 'var(--paper)' }}>
+              {emergency.summary.affected} flights affected — {emergency.summary.rerouted} rerouted,{' '}
+              {emergency.summary.returning} returning, {emergency.summary.emergency_landing} emergency landing,{' '}
+              {emergency.summary.paused} paused
+            </span>
+            <span className="t-mono-sm" style={{ color: 'var(--graticule)' }}>
+              {emergency.summary.available_for_rescue} available for rescue
+            </span>
+          </div>
         ) : null}
 
         {!aiEnabled ? (

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { useFleet, type FleetRow, type Priority } from '../lib/fleet'
 import { useStore } from '../store'
 import ScenarioControls from './ScenarioControls'
+import EmergencyPanel from './EmergencyPanel'
 
 const RANK: Record<Priority, number> = { CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 }
 const GROUNDED = new Set(['IDLE', 'CHARGING', 'MAINTENANCE', 'LANDED'])
@@ -26,7 +27,7 @@ function missionLine(row: FleetRow): string {
   return `Idle at ${row.meta.home_hub_id}`
 }
 
-function Strip({ row, selected, alert, onSelect, innerRef }: { row: FleetRow; selected: boolean; alert: 'CRITICAL' | 'WARNING' | null; onSelect: () => void; innerRef: (el: HTMLDivElement | null) => void }) {
+function Strip({ row, selected, alert, paused, onSelect, innerRef }: { row: FleetRow; selected: boolean; alert: 'CRITICAL' | 'WARNING' | null; paused: boolean; onSelect: () => void; innerRef: (el: HTMLDivElement | null) => void }) {
   const colour = stateColour(row, alert)
   return (
     <div
@@ -37,7 +38,7 @@ function Strip({ row, selected, alert, onSelect, innerRef }: { row: FleetRow; se
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onSelect()
       }}
-      className={`strip relative cursor-pointer px-3 ${selected ? 'strip-selected glow-selected' : ''}`}
+      className={`strip relative cursor-pointer px-3 ${selected ? 'strip-selected glow-selected' : ''} ${paused ? 'strip-paused' : ''}`}
       style={{
         height: 64,
         borderBottom: '1px solid var(--rule-soft)',
@@ -81,6 +82,8 @@ export default function FleetRail() {
   const fleet = useFleet()
   const selectedDroneId = useStore((s) => s.selectedDroneId)
   const incidents = useStore((s) => s.incidents)
+  const emergency = useStore((s) => s.emergency)
+  const phase = useStore((s) => s.emergencyPhase)
   const selectDrone = useStore((s) => s.selectDrone)
 
   const alerts = new Map<string, 'CRITICAL' | 'WARNING'>()
@@ -90,6 +93,12 @@ export default function FleetRail() {
       if (i.severity === 'CRITICAL' || !alerts.has(id)) alerts.set(id, i.severity)
     }
   }
+
+  const pausedIds: string[] = emergency?.summary?.drone_ids?.paused ?? []
+  // grey out one strip at a time, 50ms apart, from the t=800 mark
+  const greyedCount = !emergency ? 0 : phase >= 800 ? pausedIds.length : 0
+  const greyed = new Set(pausedIds.slice(0, greyedCount))
+  const availableForRescue = emergency?.summary?.available_for_rescue ?? 0
 
   const rows = [...fleet].sort((a, b) => RANK[a.meta.priority] - RANK[b.meta.priority] || a.id.localeCompare(b.id))
 
@@ -125,10 +134,18 @@ export default function FleetRail() {
         borderBottom: 0,
       }}
     >
-      <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--rule-soft)' }}>
+      <div className="no-scrollbar overflow-y-auto" style={{ maxHeight: '58%' }}>
+        <EmergencyPanel />
+      </div>
+      <div className="flex items-baseline justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--rule-soft)' }}>
         <h2 className="t-label" style={{ color: 'var(--graticule)' }}>
           FLEET
         </h2>
+        {emergency && phase >= 1000 ? (
+          <span className="t-label" style={{ color: 'var(--emergency)' }}>
+            AVAILABLE FOR RESCUE — {availableForRescue}
+          </span>
+        ) : null}
       </div>
       <div className="no-scrollbar flex-1 overflow-y-auto">
         {rows.length === 0 ? (
@@ -142,6 +159,7 @@ export default function FleetRail() {
               row={row}
               selected={row.id === selectedDroneId}
               alert={alerts.get(row.id) ?? null}
+              paused={greyed.has(row.id)}
               onSelect={() => selectDrone(row.id === selectedDroneId ? null : row.id)}
               innerRef={(el) => {
                 if (el) els.current.set(row.id, el)
