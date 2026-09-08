@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 2.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 3.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -77,3 +77,14 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 Tick 10 Hz with fixed `dt = 0.1 s`; `sim_clock` is the sum of ticks, never wall time.
 Battery `%/s = 0.040 + 0.0085 × payload_kg`, plus `0.25` while climbing.
 Flat costs: takeoff `1.8 %`, landing `1.2 %`. Altitude ramps toward `target_alt` at `3 m/s`.
+
+## Frontend client (Step 3)
+
+`frontend/src/lib/ws.ts` mirrors the frames above and is the only WebSocket consumer.
+It exposes `connect()`, `disconnect()`, and the subscriptions `onHello`, `onTick`, `onEvent`,
+each returning an unsubscribe function. Reconnect uses exponential backoff from 500 ms to 8 s.
+It is not wired to any component yet.
+
+Map constants live in `frontend/src/map/MapCanvas.tsx`: basemap style
+`https://tiles.openfreemap.org/styles/liberty`, and the `CITY` camera preset
+(centre `77.59605, 12.97505` — the fixture centroid — zoom 13.8, pitch 52, bearing 0).
