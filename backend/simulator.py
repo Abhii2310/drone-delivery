@@ -84,10 +84,13 @@ def tick(state: AppState, dt: float) -> None:
         else:
             drone.alt += CLIMB_RATE * dt if climbing else -CLIMB_RATE * dt
         if drone.route_progress_m >= route.total_length_m:
-            if drone.speed > 0:
-                drone.battery = max(0.0, drone.battery - DRAIN_LANDING)
-                drone.speed = 0.0
-            continue
+            if drone.mission_id is None:
+                drone.route_progress_m = 0.0  # fixture traffic loops so the city is never static
+            else:
+                if drone.speed > 0:
+                    drone.battery = max(0.0, drone.battery - DRAIN_LANDING)
+                    drone.speed = 0.0
+                continue
         drone.route_progress_m = min(route.total_length_m, drone.route_progress_m + drone.speed * dt)
         _place(drone, route)
         rate = DRAIN_BASE + DRAIN_PER_KG * drone.payload_kg + (DRAIN_CLIMB if climbing else 0.0)

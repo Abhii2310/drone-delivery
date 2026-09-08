@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 3.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 4.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -88,3 +88,19 @@ It is not wired to any component yet.
 Map constants live in `frontend/src/map/MapCanvas.tsx`: basemap style
 `https://tiles.openfreemap.org/styles/liberty`, and the `CITY` camera preset
 (centre `77.59605, 12.97505` — the fixture centroid — zoom 13.8, pitch 52, bearing 0).
+
+## Render pipeline (Step 4)
+
+`frontend/src/lib/telemetry.ts` holds the last two tick frames at module scope. It is never
+React state and never calls `setState`. `getInterpolated(nowMs)` renders at
+`serverClock - 500 ms`, lerping position and altitude between the two frames and easing
+heading with shortest-angle wrapping (`delta = ((target - current + 540) % 360) - 180`).
+Ticks whose `clock` is not newer than the current frame are dropped as duplicates.
+
+`frontend/src/lib/render.ts` runs the single `requestAnimationFrame` loop and pushes deck.gl
+layers imperatively via `MapboxOverlay.setProps({ layers })`. Layer ids, bottom to top:
+`drone-shadow`, `drone-tether`, `drone-glyph`, `drone-label`. `window.__sky` exposes
+`getFps()`, `views()` and `debug()` for verification.
+
+Simulator note: a seeded fixture drone with no `mission_id` loops its round-trip route so the
+city is never static. A drone carrying a mission still stops on arrival.

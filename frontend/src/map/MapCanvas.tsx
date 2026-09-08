@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
+import { MapboxOverlay } from '@deck.gl/mapbox'
 import { token } from '../lib/tokens'
+import { ingestHello, ingestTick } from '../lib/telemetry'
+import { startRender, stopRender } from '../lib/render'
+import { connect, disconnect, onHello, onTick } from '../lib/ws'
 
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
 // fixture centroid, computed from backend/city.py bbox
@@ -85,9 +89,20 @@ export default function MapCanvas() {
     }
     map.on('styledata', restyle)
     map.once('load', restyle)
+    const overlay = new MapboxOverlay({ interleaved: false, layers: [] })
+    map.addControl(overlay)
+    const offHello = onHello(ingestHello)
+    const offTick = onTick(ingestTick)
+    startRender(overlay)
+    connect()
+
     mapRef.current = map
     ;(window as unknown as { __map?: maplibregl.Map }).__map = map
     return () => {
+      offHello()
+      offTick()
+      stopRender()
+      disconnect()
       map.remove()
       mapRef.current = null
     }

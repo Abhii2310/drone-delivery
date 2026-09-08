@@ -33,6 +33,13 @@ function dispatch(raw: string) {
   else console.warn('ws: unknown frame', frame)
 }
 
+function detach(ws: WebSocket): void {
+  ws.onopen = null
+  ws.onmessage = null
+  ws.onclose = null
+  ws.onerror = null
+}
+
 export function connect(): void {
   stopped = false
   if (socket && socket.readyState <= WebSocket.OPEN) return
@@ -43,6 +50,7 @@ export function connect(): void {
   }
   ws.onmessage = (e) => dispatch(e.data as string)
   ws.onclose = () => {
+    if (socket !== ws) return // superseded by a newer socket; do not reconnect
     socket = null
     if (stopped) return
     setTimeout(connect, backoff)
@@ -53,6 +61,8 @@ export function connect(): void {
 
 export function disconnect(): void {
   stopped = true
-  socket?.close()
+  if (!socket) return
+  detach(socket)
+  socket.close()
   socket = null
 }
