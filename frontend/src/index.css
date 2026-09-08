@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+:root {
+  /* TODO: replace with the exact tokens from docs/UI-SPEC.md §2.2 and type scale from §2.3 */
+  --ink: #0b1220;
+  --paper: #e8ecf3;
+  --font-display: 'Barlow Semi Condensed', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
