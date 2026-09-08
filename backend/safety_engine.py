@@ -3,6 +3,7 @@ from math import cos, hypot, radians, sin
 
 from shapely.geometry import LineString, Point
 
+import ai_supervisor
 import bus
 import routing
 from geo import dist, point_along, to_ll
@@ -182,11 +183,14 @@ def _raise(state: AppState, key: str, kind: str, severity: str, drone_ids: list[
     state.incidents[incident_id] = incident
     log.info("incident %s (%s) %s %s", incident_id, key, severity, facts.get("min_sep_m", ""))
     bus.publish("incident.created", _wire(state, incident))
+    ai_supervisor.dispatch(state, incident)
 
 
 def _age_out(state: AppState, live_keys: set[str]) -> None:
     for inc in list(state.incidents.values()):
-        if inc.facts.get("key") in live_keys or inc.state not in OPEN_STATES:
+        # an incident awaiting a human decision is the human's to close; apply_action
+        # re-validates against current state, so a stale approval is caught there
+        if inc.facts.get("key") in live_keys or inc.state not in {"DETECTED", "INVESTIGATING"}:
             continue
         inc.facts["clear_checks"] = inc.facts.get("clear_checks", 0) + 1
         if inc.facts["clear_checks"] >= CLEAR_CHECKS_TO_RESOLVE:

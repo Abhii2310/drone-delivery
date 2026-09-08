@@ -117,6 +117,7 @@ class Incident(BaseModel):
 class Decision(BaseModel):
     id: str
     incident_id: str
+    severity: Severity
     summary: str
     recommended_action: Action
     alternatives: list[Action]

@@ -156,11 +156,53 @@ export default function MapCanvas() {
             .filter((p) => p.lng !== 0),
         )
         if (kind === 'incident.created') {
-          store.pushEvent({ id: `${incident.id}-created`, clock, kind, text: `${incident.id} ${incident.kind} ${incident.severity} · ${incident.drone_ids.join(' × ')}` })
+          const f = incident.facts as Record<string, number>
+          store.pushEvent({ id: `${incident.id}-created`, clock, kind, text: `${incident.id} detected · ${incident.kind} ${incident.severity} · ${incident.drone_ids.join(' × ')} · ${f.min_sep_m} m in ${f.t_cpa_s} s` })
           if (conflict_ll) flyToIncident(incident, conflict_ll)
-        } else if (incident.state === 'RESOLVED') {
-          store.pushEvent({ id: `${incident.id}-resolved`, clock, kind, text: `${incident.id} resolved` })
+        } else if (incident.state === 'INVESTIGATING') {
+          store.pushEvent({ id: `${incident.id}-investigating`, clock, kind, text: `${incident.id} investigating` })
+        } else if (incident.state === 'RESOLVED' || incident.state === 'EXECUTED' || incident.state === 'REJECTED') {
+          store.pushEvent({ id: `${incident.id}-${incident.state}`, clock, kind, text: `${incident.id} ${incident.state.toLowerCase()}` })
+          if (incident.state !== 'RESOLVED') store.clearDecision()
         }
+        return
+      }
+      if (kind === 'drone.updated') {
+        ingestDroneRoute(payload.drone, payload.route)
+        updateDroneMeta(payload.drone)
+        return
+      }
+      if (kind === 'decision.alternatives') {
+        const store = useStore.getState()
+        store.setFacts(payload.facts)
+        store.pushEvent({ id: `${payload.incident_id}-alts`, clock: payload.clock, kind, text: `${payload.incident_id} alternatives evaluated · ${payload.count} options, ${payload.facts.yielding_drone} yields` })
+        return
+      }
+      if (kind === 'decision.ready') {
+        const store = useStore.getState()
+        store.setDecision(payload.decision)
+        store.pushEvent({ id: `${payload.decision.id}-ready`, clock: payload.clock, kind, text: `${payload.decision.id} recommendation · ${payload.decision.summary} · confidence ${(payload.decision.confidence * 100).toFixed(0)}%` })
+        return
+      }
+      if (kind === 'decision.approved') {
+        useStore.getState().pushEvent({ id: `${payload.decision_id}-approved`, clock: payload.clock, kind, text: `${payload.decision_id} approved by ${payload.actor}` })
+        return
+      }
+      if (kind === 'decision.executed') {
+        const store = useStore.getState()
+        if (payload.drone) {
+          ingestDroneRoute(payload.drone, payload.route)
+          updateDroneMeta(payload.drone)
+        }
+        store.setApplying(false)
+        store.pushEvent({ id: `exec-${payload.clock}-${payload.detail}`, clock: payload.clock, kind, text: `executed · ${payload.detail}` })
+        return
+      }
+      if (kind === 'decision.rejected') {
+        const store = useStore.getState()
+        store.setApplying(false)
+        store.clearDecision()
+        store.pushEvent({ id: `rej-${payload.clock}`, clock: payload.clock, kind, text: payload.actor === 'safety' ? `${payload.decision_id} blocked by safety · ${payload.reason}` : `${payload.decision_id} rejected by ${payload.actor}` })
         return
       }
       if (kind === 'scenario.fired') {

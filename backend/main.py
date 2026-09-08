@@ -6,6 +6,8 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import actions
+import audit
 import bus
 import city
 import missions
@@ -31,6 +33,8 @@ def hello() -> dict:
         "routes": [simulator.route_full(r) for r in state.routes.values()],
         "missions": [m.model_dump() for m in state.missions.values()],
         "incidents": [i.model_dump() for i in state.incidents.values()],
+        "decisions": [d.model_dump() for d in state.decisions.values()],
+        "audit": audit.query(state, 50),
         "scenarios": scenarios.NAMES,
     }
 
@@ -98,6 +102,60 @@ async def post_mission(req: MissionRequest) -> dict:
     if error is not None or mission is None:
         raise HTTPException(status_code=400, detail=error or "mission could not be created")
     return mission.model_dump()
+
+
+class ApprovalRequest(BaseModel):
+    actor: str = "operator"
+    alternative_index: int | None = None  # defaults to the recommended action
+
+
+@app.get("/api/audit")
+def get_audit(limit: int = 200) -> dict:
+    return {"events": audit.query(state, limit)}
+
+
+@app.post("/api/decisions/{decision_id}/approve")
+async def approve_decision(decision_id: str, req: ApprovalRequest) -> dict:
+    decision = state.decisions.get(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail=f"unknown decision {decision_id}")
+    incident = state.incidents.get(decision.incident_id)
+    if incident is None or incident.state != "AWAITING_APPROVAL":
+        raise HTTPException(status_code=409, detail="decision is no longer awaiting approval")
+
+    chosen = decision.recommended_action
+    if req.alternative_index is not None:
+        if not 0 <= req.alternative_index < len(decision.alternatives):
+            raise HTTPException(status_code=400, detail=f"no alternative at index {req.alternative_index}")
+        chosen = decision.alternatives[req.alternative_index]
+    bus.publish("decision.approved", {"decision_id": decision_id, "incident_id": incident.id,
+                                      "actor": req.actor, "action": chosen.model_dump(),
+                                      "clock": round(state.sim_clock, 2)})
+    result = actions.apply_action(state, chosen, req.actor, incident.id)
+    if not result["ok"]:
+        bus.publish("decision.rejected", {"decision_id": decision_id, "incident_id": incident.id,
+                                          "actor": "safety", "reason": result["reason"],
+                                          "clock": round(state.sim_clock, 2)})
+        raise HTTPException(status_code=400, detail=result["reason"])
+    incident.state = "EXECUTED"
+    bus.publish("incident.updated", {"incident": incident.model_dump(), "clock": round(state.sim_clock, 2)})
+    return result
+
+
+@app.post("/api/decisions/{decision_id}/reject")
+async def reject_decision(decision_id: str, req: ApprovalRequest) -> dict:
+    decision = state.decisions.get(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail=f"unknown decision {decision_id}")
+    incident = state.incidents.get(decision.incident_id)
+    if incident is not None:
+        incident.state = "REJECTED"
+        bus.publish("incident.updated", {"incident": incident.model_dump(), "clock": round(state.sim_clock, 2)})
+    audit.append(state, req.actor, "DECISION_REJECTED", {"decision_id": decision_id}, {}, decision.summary)
+    bus.publish("decision.rejected", {"decision_id": decision_id, "incident_id": decision.incident_id,
+                                      "actor": req.actor, "reason": "rejected by operator",
+                                      "clock": round(state.sim_clock, 2)})
+    return {"ok": True, "detail": "decision rejected"}
 
 
 @app.post("/api/scenario/{name}")

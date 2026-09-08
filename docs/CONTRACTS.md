@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 8.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 9.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -67,6 +67,9 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 | POST | `/api/reset` | — | the fresh `hello` message; also rebroadcast on `/ws` | 2 |
 | POST | `/api/missions` | `{type, payload_kind, priority, origin_hub_id, dest_id}` | the created `Mission`, or 400 with a reason | 7 |
 | POST | `/api/scenario/{name}` | — | `{name, detail}`, or 400 for an unknown or impossible scenario | 8 |
+| POST | `/api/decisions/{id}/approve` | `{actor, alternative_index?}` | `{ok, detail}`, 400 with the hard-rule reason, 404, or 409 if no longer awaiting | 9 |
+| POST | `/api/decisions/{id}/reject` | `{actor}` | `{ok, detail}` | 9 |
+| GET | `/api/audit` | `?limit` | `{events: [...]}` | 9 |
 
 ### `GET /api/city`
 
@@ -205,3 +208,33 @@ zero. It reuses the same pair on repeat triggers, so it is idempotent.
 
 Simulator notes: C3 and C7 carry no seeded traffic, since they are reserved for the engineered
 conflict. Only routes with `created_by == "fixture"` loop; scenario and mission routes end.
+
+## Core loop (Step 9)
+
+`backend/ai_supervisor.py` builds a deterministic fact packet from the safety engine only:
+incident facts, drone states, 2-4 pre-evaluated alternatives from `find_alternative_routes`
+plus `evaluate_route`, landing options when battery is low, active policies, and the three
+hard rules as literal strings. `risk_pct_after` re-runs the analytic CPA with the yielding
+drone turned onto the alternative's first leg, so it is a real number, not a heuristic.
+`mock_supervisor` picks the lowest `risk_pct_after` with no violations, breaking ties on SLA,
+and derives confidence from the margin between the best two. A 900 ms delay makes the
+investigating state visible. `dispatch` uses `asyncio.create_task`; the tick loop never awaits.
+
+Incident states: `DETECTED -> INVESTIGATING -> AWAITING_APPROVAL -> EXECUTED | REJECTED`.
+Auto-resolve applies only to `DETECTED` and `INVESTIGATING`; once a recommendation is on the
+table the human owns it, and `apply_action` re-validates against current state.
+
+`backend/actions.py::apply_action` is the only function permitted to change `drone.route_id`,
+`drone.status`, `drone.target_alt` or `mission.state`. It re-validates, enforces the hard
+rules with a readable reason, mutates, appends an audit event and publishes
+`decision.executed`. On REROUTE it rebuilds the route to start at the drone's current
+position and join the corridor at the nearest point, so the drone banks rather than teleports,
+and sets `previous_route_id` to feed the ghost route layer.
+
+Event kinds added: `drone.updated`, `decision.alternatives`, `decision.ready`,
+`decision.approved`, `decision.executed`, `decision.rejected`, `audit.append`.
+
+Routing fix: a waypoint carries the altitude of the leg leaving it. It previously carried the
+arriving leg's altitude, which made the hard-rule gate read the wrong altitude per segment.
+`_attach` links an off-graph point to several nearby nodes, otherwise a drone mid-corridor is
+stranded when that corridor is excluded and no alternative can be found.

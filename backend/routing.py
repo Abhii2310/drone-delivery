@@ -7,6 +7,8 @@ from models import Drone, Route, Zone
 from state import AppState
 
 SNAP_M = 500.0
+EXTRA_LINKS = 3
+LINK_RADIUS_M = 1500.0
 DRAIN_BASE = 0.040
 DRAIN_PER_KG = 0.0085
 BLOCKING = {"NO_FLY", "TEMP_RESTRICTED", "SCHOOL", "EMERGENCY"}
@@ -50,14 +52,19 @@ def _attach(graph: dict[Node, list[Edge]], alt_of: dict[Node, float], point: tup
     key = _key(point)
     if key in graph:
         return key
-    nearest = min(graph, key=lambda n: dist(point, n))
-    gap = dist(point, nearest)
-    if gap > SNAP_M:
-        raise ValueError(f"point {point} is {gap:.0f} m from the corridor network")
-    band = alt_of[nearest]
-    graph.setdefault(key, []).append((nearest, gap, "", band))
-    graph[nearest].append((key, gap, "", band))
-    alt_of[key] = band
+    ordered = sorted(graph, key=lambda n: dist(point, n))
+    if dist(point, ordered[0]) > SNAP_M:
+        raise ValueError(f"point {point} is {dist(point, ordered[0]):.0f} m from the corridor network")
+    # attach to several nearby nodes, otherwise a drone mid-corridor is stranded when that
+    # corridor is excluded and no alternative can be found
+    for node in ordered[:1 + EXTRA_LINKS]:
+        gap = dist(point, node)
+        if gap > LINK_RADIUS_M:
+            break
+        band = alt_of[node]
+        graph.setdefault(key, []).append((node, gap, "", band))
+        graph[node].append((key, gap, "", band))
+        alt_of.setdefault(key, band)
     return key
 
 
@@ -112,18 +119,21 @@ def plan_route(
 
     if goal not in best:
         return None
-    waypoints: list[tuple[float, float, float]] = []
-    corridor_ids: list[str] = []
+    legs: list[tuple[Node, Node, str, float]] = []
     node = goal
     while node != start:
         prev, corridor_id, alt = came[node]
-        waypoints.append((node[0], node[1], alt))
+        legs.append((prev, node, corridor_id, alt))
+        node = prev
+    legs.reverse()
+    corridor_ids: list[str] = []
+    for _, _, corridor_id, _ in legs:
         if corridor_id and corridor_id not in corridor_ids:
             corridor_ids.append(corridor_id)
-        node = prev
-    waypoints.append((start[0], start[1], waypoints[-1][2] if waypoints else alt_min))
-    waypoints.reverse()
-    corridor_ids.reverse()
+    # a waypoint carries the altitude of the leg LEAVING it, which is what the hard-rule
+    # gate and the renderer both assume
+    waypoints = [(a[0], a[1], alt) for a, _, _, alt in legs]
+    waypoints.append((legs[-1][1][0], legs[-1][1][1], legs[-1][3]))
     line = [(x, y) for x, y, _ in waypoints]
     return Route(id=route_id, waypoints=waypoints, corridor_ids=corridor_ids,
                  total_length_m=polyline_length(line), created_by=created_by)

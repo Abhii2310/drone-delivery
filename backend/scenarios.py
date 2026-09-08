@@ -43,6 +43,8 @@ def _fly_corridor(state: AppState, drone, corridor_id: str, lead_m: float) -> No
     drone.speed = CRUISE
     drone.status = "ENROUTE"
     simulator._place(drone, route)
+    bus.publish("drone.updated", {"drone": simulator.drone_full(drone), "route": simulator.route_full(route),
+                                  "clock": round(state.sim_clock, 2)})
 
 
 def _pick_two(state: AppState) -> list:
