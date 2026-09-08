@@ -1,6 +1,6 @@
 # SKYGUARD — Wire contracts
 
-Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 9.
+Frozen shapes for the WebSocket and REST surface. Updated every step. Last updated: Step 10.
 
 All coordinates on the wire are `[lat, lng]` for city geometry and `lng, lat` fields for drones.
 Metres never cross the wire. Altitudes are metres above ground.
@@ -70,6 +70,7 @@ Kinds planned (BUILD-PLAN §8): `incident.created`, `incident.updated`, `decisio
 | POST | `/api/decisions/{id}/approve` | `{actor, alternative_index?}` | `{ok, detail}`, 400 with the hard-rule reason, 404, or 409 if no longer awaiting | 9 |
 | POST | `/api/decisions/{id}/reject` | `{actor}` | `{ok, detail}` | 9 |
 | GET | `/api/audit` | `?limit` | `{events: [...]}` | 9 |
+| POST | `/api/ai` | `{enabled}` | `{ai_enabled}`; also broadcasts `ai.changed` | 10 |
 
 ### `GET /api/city`
 
@@ -238,3 +239,32 @@ Routing fix: a waypoint carries the altitude of the leg leaving it. It previousl
 arriving leg's altitude, which made the hard-rule gate read the wrong altitude per segment.
 `_attach` links an off-graph point to several nearby nodes, otherwise a drone mid-corridor is
 stranded when that corridor is excluded and no alternative can be found.
+
+## Live supervisor and altitude change (Step 10)
+
+`live_supervisor(facts)` makes one call to the model named by `SKYGUARD_MODEL`
+(default `claude-sonnet-4-6`), `max_tokens` 1000, with `client.messages.create` on
+`AsyncAnthropic(max_retries=0, timeout=8)` wrapped in `asyncio.wait_for(..., 8)`. Output shape
+is forced with a `strict` tool definition (`submit_decision`) plus
+`tool_choice={"type":"tool","name":"submit_decision"}` — there is no JSON prompting, fence
+stripping or regex parsing. The tool takes `chosen_alternative_index`, so the model can only
+pick from the supplied alternatives; the index is re-validated server-side and an out-of-range
+or rule-violating pick falls back to the lowest-risk legal alternative with a log line.
+
+`decide(facts)` chooses live or mock from `USE_LIVE_AI`, and any failure at all — timeout,
+connection error, DNS, auth, schema — falls back to `mock_supervisor` silently, logged at
+warning level. `source` is `LIVE_AI` or `MOCK_AI` and renders as a chip in the rail.
+
+`temperature` is not sent: it was removed from the Messages API in the installed SDK
+generation (anthropic 1.4.0) and raises a TypeError. Determinism comes from the closed tool
+schema and server-side validation instead.
+
+`ALTITUDE_CHANGE` is generated whenever a 25-40 m offset clears the conflict while staying
+inside the operating envelope tightened by every zone containing the drone. `apply_action`
+sets `target_alt` only; the simulator ramps at 3 m/s so a 25 m change takes about 8 s and is
+visible in 3D. Alternatives are ordered altitude, two reroutes, hold, capped at four.
+
+`state.ai_enabled` gates `dispatch`. With it false an incident is still created, the band still
+appears and the camera still flies, but no investigation runs and the rail reads
+"AI Supervisor disabled. Raw safety alert only." with no approval control. Reset restores it
+to true.

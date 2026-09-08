@@ -18,6 +18,7 @@ class AppState:
         self.policies: list[dict] = []
         self.audit: list[dict] = []
         self.noise_ledger: list[dict] = []
+        self.ai_enabled: bool = True
         self.weather: dict = {"wind_speed": 8.2, "wind_direction": 241.0, "visibility_m": 9400.0}
         self.sim_clock: float = 0.0
         self.revision: int = 0

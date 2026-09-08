@@ -167,6 +167,10 @@ export default function MapCanvas() {
         }
         return
       }
+      if (kind === 'ai.changed') {
+        useStore.getState().setAiEnabled(payload.enabled)
+        return
+      }
       if (kind === 'drone.updated') {
         ingestDroneRoute(payload.drone, payload.route)
         updateDroneMeta(payload.drone)

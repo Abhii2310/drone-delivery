@@ -22,6 +22,8 @@ export default function StatusBar() {
   const incidents = useStore((s) => s.incidents.length)
   const emergency = useStore((s) => s.emergency)
   const aiEnabled = useStore((s) => s.aiEnabled)
+  const liveAi = useStore((s) => s.liveAi)
+  const setAiEnabled = useStore((s) => s.setAiEnabled)
   const composerOpen = useStore((s) => s.composerOpen)
   const toggleComposer = useStore((s) => s.toggleComposer)
   const airborne = fleet.filter((d) => AIRBORNE.has(d.status)).length
@@ -71,15 +73,35 @@ export default function StatusBar() {
         >
           NEW DELIVERY
         </button>
-        <span className="flex items-center gap-1.5">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={aiEnabled}
+          onClick={async () => {
+            const next = !aiEnabled
+            setAiEnabled(next)
+            await fetch('/api/ai', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ enabled: next }),
+            })
+          }}
+          className="flex items-center gap-1.5 px-2 py-1"
+          style={{
+            background: 'transparent',
+            border: `1px solid ${aiEnabled ? 'var(--nominal)' : 'var(--rule)'}`,
+            borderRadius: 'var(--r-sm)',
+            cursor: 'pointer',
+          }}
+        >
           <span
             className="inline-block h-1.5 w-1.5"
             style={{ borderRadius: 'var(--r-md)', background: aiEnabled ? 'var(--nominal)' : 'var(--muted)' }}
           />
-          <span className="t-label" style={{ color: 'var(--graticule)' }}>
-            AI {aiEnabled ? 'LIVE' : 'OFF'}
+          <span className="t-label" style={{ color: aiEnabled ? 'var(--nominal)' : 'var(--muted)' }}>
+            AI {aiEnabled ? (liveAi ? 'LIVE' : 'MOCK') : 'OFF'}
           </span>
-        </span>
+        </button>
         <span
           className="t-label px-2 py-1"
           style={{

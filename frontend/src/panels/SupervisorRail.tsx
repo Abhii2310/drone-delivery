@@ -56,7 +56,11 @@ function Alternative({ action, index, selected, recommended, onSelect }: { actio
     >
       <div className="flex items-baseline justify-between pb-1">
         <span className="t-title" style={{ color: 'var(--paper)' }}>
-          {action.kind === 'REROUTE' ? `Reroute via ${corridors || 'direct'}` : `Hold ${num(p.seconds)} s`}
+          {action.kind === 'REROUTE'
+            ? `Reroute via ${corridors || 'direct'}`
+            : action.kind === 'ALTITUDE_CHANGE'
+              ? `${String(p.direction) === 'descend' ? 'Descend' : 'Climb'} ${num(p.offset_m)} m to ${num(p.target_alt)} m`
+              : `Hold ${num(p.seconds)} s`}
         </span>
         {recommended ? (
           <span className="t-label" style={{ color: 'var(--advisory)' }}>
@@ -81,6 +85,7 @@ export default function SupervisorRail() {
   const facts = useStore((s) => s.facts)
   const selected = useStore((s) => s.selectedAlternative)
   const applying = useStore((s) => s.applying)
+  const aiEnabled = useStore((s) => s.aiEnabled)
   const selectAlternative = useStore((s) => s.selectAlternative)
   const setApplying = useStore((s) => s.setApplying)
   const [error, setError] = useState<string | null>(null)
@@ -89,7 +94,7 @@ export default function SupervisorRail() {
 
   const open = incidents.filter((i) => i.severity !== 'INFO')
   const investigating = open.some((i) => i.state === 'INVESTIGATING' || i.state === 'DETECTED')
-  const expanded = open.length > 0 || decision !== null
+  const expanded = aiEnabled && (open.length > 0 || decision !== null)
 
   const factRows = facts
     ? [
@@ -163,13 +168,17 @@ export default function SupervisorRail() {
           />
         ) : null}
 
-        {open.length === 0 && !decision ? (
+        {!aiEnabled ? (
+          <p className="t-body" style={{ color: 'var(--muted)' }}>
+            AI Supervisor disabled. Raw safety alert only.
+          </p>
+        ) : open.length === 0 && !decision ? (
           <p className="t-body" style={{ color: 'var(--muted)' }}>
             No open incidents. Airspace nominal.
           </p>
         ) : null}
 
-        {facts ? (
+        {aiEnabled && facts ? (
           <div className="flex flex-col gap-1 pb-4">
             <span className="t-label pb-1" style={{ color: 'var(--graticule)' }}>
               {decision ? 'FACTS' : 'INVESTIGATING'}
@@ -182,11 +191,26 @@ export default function SupervisorRail() {
           </div>
         ) : null}
 
-        {decision ? (
+        {aiEnabled && decision ? (
           <div className="flex flex-col gap-3">
             <div>
-              <span className="t-label" style={{ color: 'var(--graticule)' }}>
-                RECOMMENDATION · {decision.source} · CONFIDENCE {(decision.confidence * 100).toFixed(0)}%
+              <span className="flex items-center gap-2">
+                <span className="t-label" style={{ color: 'var(--graticule)' }}>
+                  RECOMMENDATION
+                </span>
+                <span
+                  className="t-label px-1.5"
+                  style={{
+                    color: decision.source === 'LIVE_AI' ? 'var(--nominal)' : 'var(--graticule)',
+                    border: `1px solid ${decision.source === 'LIVE_AI' ? 'var(--nominal)' : 'var(--rule)'}`,
+                    borderRadius: 'var(--r-sm)',
+                  }}
+                >
+                  {decision.source}
+                </span>
+                <span className="t-label" style={{ color: 'var(--graticule)' }}>
+                  CONFIDENCE {(decision.confidence * 100).toFixed(0)}%
+                </span>
               </span>
               <p className="t-title pt-1" style={{ color: 'var(--paper)' }}>
                 {decision.summary}
@@ -227,6 +251,7 @@ export default function SupervisorRail() {
         ) : null}
       </div>
 
+      {aiEnabled ? (
       <div className="flex gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--rule-soft)' }}>
         <button
           type="button"
@@ -260,6 +285,7 @@ export default function SupervisorRail() {
           Reject
         </button>
       </div>
+      ) : null}
     </aside>
   )
 }

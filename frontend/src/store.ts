@@ -53,13 +53,14 @@ type Store = {
   cameraMode: CameraMode
   weather: Weather
   aiEnabled: boolean
+  liveAi: boolean
   composerOpen: boolean
   toggleComposer: (open?: boolean) => void
   selectDrone: (id: string | null) => void
   setCameraMode: (mode: CameraMode) => void
   setRole: (role: Role) => void
   setAiEnabled: (on: boolean) => void
-  applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[] }) => void
+  applyHello: (frame: { missions: unknown[]; incidents: IncidentRecord[]; ai_enabled?: boolean; live_ai?: boolean }) => void
   pushEvent: (event: TimelineEvent) => void
   upsertMission: (mission: MissionRecord) => void
   upsertIncident: (incident: IncidentRecord) => void
@@ -87,13 +88,14 @@ export const useStore = create<Store>((set) => ({
   cameraMode: 'CITY',
   weather: null,
   aiEnabled: true,
+  liveAi: false,
   composerOpen: false,
   toggleComposer: (open) => set((s) => ({ composerOpen: open ?? !s.composerOpen })),
   selectDrone: (id) => set({ selectedDroneId: id }),
   setCameraMode: (cameraMode) => set({ cameraMode }),
   setRole: (role) => set({ role }),
   setAiEnabled: (aiEnabled) => set({ aiEnabled }),
-  applyHello: (frame) => set({ missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
+  applyHello: (frame) => set({ aiEnabled: frame.ai_enabled ?? true, liveAi: frame.live_ai ?? false, missions: frame.missions, incidents: frame.incidents, decisions: [], decision: null, facts: null, selectedAlternative: null, applying: false, events: [] }),
   pushEvent: (event) =>
     set((s) => (s.events.some((e) => e.id === event.id) ? s : { events: [...s.events, event].slice(-120) })),
   upsertIncident: (incident) =>

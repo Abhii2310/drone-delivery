@@ -1,6 +1,6 @@
 import logging
 
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 import audit
 import bus
@@ -14,7 +14,7 @@ log = logging.getLogger("skyguard.actions")
 
 HOLD_SECONDS = 20.0
 RESERVE_PCT = 20.0
-IMPLEMENTED = {"REROUTE", "HOLD"}
+IMPLEMENTED = {"REROUTE", "HOLD", "ALTITUDE_CHANGE"}
 
 
 def _snapshot(state: AppState, drone_id: str) -> dict:
@@ -103,6 +103,17 @@ def apply_action(state: AppState, action: Action, actor: str, incident_id: str |
         drone.target_alt = joined.waypoints[-1][2]
         drone.status = "ENROUTE"
         detail = f"{drone_id} rerouted via {'+'.join(route.corridor_ids) or 'direct'}, {joined.total_length_m:.0f} m"
+    elif action.kind == "ALTITUDE_CHANGE":
+        target = float(action.params.get("target_alt", drone.alt))
+        for zone in state.zones.values():
+            if zone.polygon.contains(Point(drone.x, drone.y)) and not zone.alt_min <= target <= zone.alt_max:
+                reason = f"{target:.0f} m is outside the {zone.name} band of {zone.alt_min:.0f}-{zone.alt_max:.0f} m"
+                audit.append(state, actor, "ALTITUDE_CHANGE_REJECTED", before, before, reason)
+                return {"ok": False, "reason": reason}
+        # target_alt only; the simulator ramps at CLIMB_RATE so the change is visible in 3D
+        drone.target_alt = target
+        seconds = abs(target - drone.alt) / simulator.CLIMB_RATE
+        detail = f"{drone_id} {'descending' if target < drone.alt else 'climbing'} to {target:.0f} m over {seconds:.0f} s"
     else:  # HOLD
         drone.previous_route_id = drone.route_id
         drone.status = "HOLDING"

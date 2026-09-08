@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+import os
 
 from shapely.geometry import LineString, Point
 
@@ -13,6 +15,9 @@ from state import AppState
 log = logging.getLogger("skyguard.supervisor")
 
 MOCK_LATENCY_S = 0.9
+LIVE_TIMEOUT_S = 8.0
+MODEL = os.environ.get("SKYGUARD_MODEL", "claude-sonnet-4-6")
+VERTICAL_OFFSETS = (25.0, 30.0, 35.0, 40.0)
 R_WARN_M = 40.0
 HOLD_SECONDS = 20.0
 RANK = {"CRITICAL": 0, "HIGH": 1, "NORMAL": 2, "LOW": 3}
@@ -45,6 +50,44 @@ def _risk_after(state: AppState, drone, new_route, other) -> int:
                                      "alt": wp[0][2], "target_alt": wp[0][2]})
     conflict = safety_engine.predict_collision(probe, other)
     return int(conflict["risk_pct"]) if conflict else 0
+
+
+def _alt_bounds(state: AppState, drone, route) -> tuple[float, float]:
+    """Operating envelope tightened by every zone the drone is currently inside."""
+    low, high = 40.0, 150.0
+    for zone in state.zones.values():
+        if zone.polygon.contains(Point(drone.x, drone.y)):
+            low, high = max(low, zone.alt_min), min(high, zone.alt_max)
+    return low, high
+
+
+def _altitude_options(state: AppState, yielder, other, route) -> list[dict]:
+    """A 25-40 m vertical offset that clears the conflict without breaching the band."""
+    if other is None:
+        return []
+    import safety_engine
+
+    low, high = _alt_bounds(state, yielder, route)
+    for offset in VERTICAL_OFFSETS:
+        for target in (yielder.alt - offset, yielder.alt + offset):
+            if target < low or target > high:
+                continue
+            probe = yielder.model_copy(update={"alt": target, "target_alt": target})
+            if safety_engine.predict_collision(probe, other) is not None:
+                continue
+            climb_s = round(offset / safety_engine.CLIMB_RATE, 1)
+            direction = "descend" if target < yielder.alt else "climb"
+            return [{
+                "action": {"kind": "ALTITUDE_CHANGE", "drone_id": yielder.id,
+                           "params": {"target_alt": target, "offset_m": offset, "direction": direction,
+                                      "risk_pct_after": 0, "sla_delta_s": 0.0,
+                                      "battery_delta_pct": round(0.25 * climb_s, 2),
+                                      "community_delta_pct": 0.0}},
+                "risk_pct_after": 0, "sla_delta_s": 0.0,
+                "battery_delta_pct": round(0.25 * climb_s, 2), "community_delta_pct": 0.0,
+                "violates": [], "corridor_ids": [], "length_m": 0.0,
+            }]
+    return []
 
 
 def _hold_risk(state: AppState, yielder, other) -> int:
@@ -123,11 +166,29 @@ def build_fact_packet(state: AppState, incident: Incident) -> dict:
                      "vertical_sep_m": incident.facts.get("vertical_sep_m")},
         "drones": [_drone_facts(state, d) for d in (yielder, other) if d is not None],
         "yielding_drone": yielder.id,
-        "alternatives": alternatives[:4],
+        "alternatives": (_altitude_options(state, yielder, other, current) + alternatives[:2] + alternatives[-1:])[:4],
         "landing_options": landing,
         "active_policies": list(state.policies),
         "hard_rules": HARD_RULES,
     }
+
+
+def _action_line(kind: str, who: str, where: str, params: dict, inc: dict, best: dict) -> str:
+    drop = f"drops predicted risk from {inc['risk_pct']}% to {best['risk_pct_after']}%"
+    if kind == "REROUTE":
+        return f"Rerouting {who} via {where} {drop}."
+    if kind == "ALTITUDE_CHANGE":
+        return (f"A {params['offset_m']:.0f} m {params['direction']} to {params['target_alt']:.0f} m "
+                f"separates the pair vertically and {drop}, staying inside the permitted altitude band.")
+    return f"Holding {who} for {best['sla_delta_s']:.0f} s {drop}."
+
+
+def _summary(kind: str, who: str, where: str, params: dict, best: dict) -> str:
+    if kind == "REROUTE":
+        return f"Reroute {who} via {where}"
+    if kind == "ALTITUDE_CHANGE":
+        return f"{params['direction'].title()} {who} {params['offset_m']:.0f} m to {params['target_alt']:.0f} m"
+    return f"Hold {who} for {best['sla_delta_s']:.0f} s"
 
 
 def _rejection_line(ranked: list[dict], best: dict) -> str:
@@ -151,17 +212,15 @@ def mock_supervisor(facts: dict) -> Decision:
     other = next((d["id"] for d in facts["drones"] if d["id"] != who), "the other aircraft")
     kind = best["action"]["kind"]
     where = "+".join(best["corridor_ids"]) or "a direct leg"
+    params = best["action"]["params"]
     reasoning = [
         f"{inc['kind'].title()} predicted between {who} and {other}: {inc['min_sep_m']} m at closest approach in {inc['t_cpa_s']} s, {inc['vertical_sep_m']} m vertical.",
         f"{who} carries the lower priority of the pair, so it yields under the rule that CRITICAL missions outrank NORMAL.",
-        (f"Rerouting {who} via {where} drops predicted risk from {inc['risk_pct']}% to {best['risk_pct_after']}%."
-         if kind == "REROUTE"
-         else f"Holding {who} for {best['sla_delta_s']:.0f} s drops predicted risk from {inc['risk_pct']}% to {best['risk_pct_after']}%."),
+        _action_line(kind, who, where, params, inc, best),
         f"Cost of the change: {best['sla_delta_s']:+.0f} s on schedule, {best['battery_delta_pct']:+.2f}% battery, {best['community_delta_pct']:+.1f} s over the quiet zone.",
         _rejection_line(ranked, best),
     ]
-    summary = (f"Reroute {who} via {where}" if kind == "REROUTE" else f"Hold {who} for {best['sla_delta_s']:.0f} s") + \
-              f" — risk {inc['risk_pct']}% to {best['risk_pct_after']}%"
+    summary = _summary(kind, who, where, params, best) + f" — risk {inc['risk_pct']}% to {best['risk_pct_after']}%"
 
     return Decision(
         id=f"DEC-{inc['id']}", incident_id=inc["id"], severity=inc["severity"], summary=summary,
@@ -174,6 +233,104 @@ def mock_supervisor(facts: dict) -> Decision:
     )
 
 
+SYSTEM_PROMPT = """You are the SKYGUARD airspace supervisor for an autonomous drone fleet over Bengaluru.
+
+A deterministic safety engine has already detected the conflict, computed all geometry, and
+pre-evaluated every legal option. Your job is judgement, not arithmetic.
+
+Rules you must follow:
+- Choose exactly one option from the `alternatives` array by its index. You may not invent an
+  action, alter its parameters, or suggest anything outside that array.
+- Never compute or re-derive geometry, separation, risk or battery figures. Quote the numbers
+  you are given.
+- Weigh residual risk first, then schedule cost, then battery, then community noise impact.
+- Hard rules, which override every other consideration:
+  NO_FLY may never be entered
+  battery reserve floor is 20%
+  CRITICAL missions outrank NORMAL
+
+Explain the trade-off in 3 to 5 short sentences an air traffic operator would accept, citing
+the real figures from the fact packet."""
+
+DECISION_TOOL = {
+    "name": "submit_decision",
+    "description": "Record the chosen resolution for this airspace conflict.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "chosen_alternative_index": {"type": "integer", "description": "Zero-based index into the alternatives array."},
+            "summary": {"type": "string", "description": "One line an operator reads first."},
+            "reasoning": {"type": "array", "items": {"type": "string"}, "description": "3 to 5 sentences citing the given figures."},
+            "confidence": {"type": "number", "description": "0 to 1."},
+        },
+        "required": ["chosen_alternative_index", "summary", "reasoning", "confidence"],
+        "additionalProperties": False,
+    },
+    "strict": True,
+}
+
+
+async def live_supervisor(facts: dict) -> Decision:
+    """One structured call. Raises on any failure so the caller can fall back to the mock."""
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(max_retries=0, timeout=LIVE_TIMEOUT_S)
+    response = await asyncio.wait_for(
+        client.messages.create(
+            model=MODEL,
+            max_tokens=1000,
+            # temperature was removed from the Messages API in this SDK generation; the
+            # closed tool schema plus server-side index validation carry determinism instead
+            system=SYSTEM_PROMPT,
+            tools=[DECISION_TOOL],
+            tool_choice={"type": "tool", "name": "submit_decision"},
+            messages=[{"role": "user", "content": json.dumps(facts, separators=(",", ":"))}],
+        ),
+        timeout=LIVE_TIMEOUT_S,
+    )
+    block = next(b for b in response.content if b.type == "tool_use" and b.name == "submit_decision")
+    out = block.input
+
+    alternatives = facts["alternatives"]
+    index = out.get("chosen_alternative_index")
+    if not isinstance(index, int) or not 0 <= index < len(alternatives):
+        log.warning("live supervisor returned index %r outside 0..%d; using lowest risk",
+                    index, len(alternatives) - 1)
+        index = min(range(len(alternatives)), key=lambda i: (alternatives[i]["risk_pct_after"], alternatives[i]["sla_delta_s"]))
+    best = alternatives[index]
+    if best["violates"]:
+        log.warning("live supervisor chose an option violating %s; using lowest risk", best["violates"])
+        legal = [a for a in alternatives if not a["violates"]]
+        best = min(legal or alternatives, key=lambda a: (a["risk_pct_after"], a["sla_delta_s"]))
+
+    inc = facts["incident"]
+    reasoning = [str(r) for r in out.get("reasoning", [])][:6] or ["No reasoning returned."]
+    return Decision(
+        id=f"DEC-{inc['id']}", incident_id=inc["id"], severity=inc["severity"],
+        summary=str(out.get("summary") or "Resolution selected"),
+        recommended_action=Action(**best["action"]),
+        alternatives=[Action(**a["action"]) for a in alternatives],
+        reasoning=reasoning, risk_before=float(inc["risk_pct"] or 0), risk_after=float(best["risk_pct_after"]),
+        battery_delta_pct=best["battery_delta_pct"], sla_delta_s=best["sla_delta_s"],
+        community_delta_pct=best["community_delta_pct"],
+        confidence=round(min(0.99, max(0.0, float(out.get("confidence", 0.7)))), 2),
+        requires_human_approval=inc["severity"] in {"CRITICAL", "HIGH"}, source="LIVE_AI",
+    )
+
+
+async def decide(facts: dict) -> Decision:
+    """Live Claude when configured, mock otherwise. Any failure falls back silently."""
+    if os.environ.get("USE_LIVE_AI", "false").lower() not in {"1", "true", "yes"}:
+        await asyncio.sleep(MOCK_LATENCY_S)
+        return mock_supervisor(facts)
+    try:
+        return await live_supervisor(facts)
+    except Exception as exc:  # noqa: BLE001 - the demo must never stall on the network
+        log.warning("live supervisor unavailable (%s: %s); falling back to MOCK_AI",
+                    type(exc).__name__, str(exc)[:160])
+        return mock_supervisor(facts)
+
+
 async def investigate(state: AppState, incident_id: str) -> None:
     incident = state.incidents.get(incident_id)
     if incident is None or incident.state != "DETECTED":
@@ -184,11 +341,10 @@ async def investigate(state: AppState, incident_id: str) -> None:
     facts = build_fact_packet(state, incident)
     bus.publish("decision.alternatives", {"incident_id": incident.id, "facts": facts,
                                           "count": len(facts["alternatives"]), "clock": round(state.sim_clock, 2)})
-    await asyncio.sleep(MOCK_LATENCY_S)
+    decision = await decide(facts)
 
     if state.incidents.get(incident_id) is not incident or incident.state != "INVESTIGATING":
         return
-    decision = mock_supervisor(facts)
     state.decisions[decision.id] = decision
     incident.decision_id = decision.id
     incident.state = "AWAITING_APPROVAL"
@@ -199,7 +355,7 @@ async def investigate(state: AppState, incident_id: str) -> None:
 
 def dispatch(state: AppState, incident: Incident) -> None:
     """Fire-and-forget. The tick loop must never await the supervisor."""
-    if incident.kind != "COLLISION" or incident.severity == "INFO":
+    if not state.ai_enabled or incident.kind != "COLLISION" or incident.severity == "INFO":
         return
     try:
         asyncio.get_running_loop()

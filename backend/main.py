@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -36,6 +37,8 @@ def hello() -> dict:
         "decisions": [d.model_dump() for d in state.decisions.values()],
         "audit": audit.query(state, 50),
         "scenarios": scenarios.NAMES,
+        "ai_enabled": state.ai_enabled,
+        "live_ai": os.environ.get("USE_LIVE_AI", "false").lower() in {"1", "true", "yes"},
     }
 
 
@@ -102,6 +105,17 @@ async def post_mission(req: MissionRequest) -> dict:
     if error is not None or mission is None:
         raise HTTPException(status_code=400, detail=error or "mission could not be created")
     return mission.model_dump()
+
+
+class AiToggle(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/ai")
+async def set_ai(req: AiToggle) -> dict:
+    state.ai_enabled = req.enabled
+    bus.publish("ai.changed", {"enabled": state.ai_enabled, "clock": round(state.sim_clock, 2)})
+    return {"ai_enabled": state.ai_enabled}
 
 
 class ApprovalRequest(BaseModel):
