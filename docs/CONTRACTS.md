@@ -549,3 +549,27 @@ the mobile branch is a phone-shaped frame in flow, not a fixed full-viewport ove
 footage is real aerial night video, CC BY 3.0 via Wikimedia Commons, attributed in the section
 and standing in for a live downlink; two clips are listed so one refusal never blanks the
 screen, and a failed load renders a NO SIGNAL card.
+
+### Landing polish pass
+
+What changed and why, in the order a viewer meets it:
+
+- A boot sequence holds a dark frame until the scene has actually drawn, then fades. The page
+  never opens on an empty canvas.
+- The ground is a surface, not a void: block pavements, two lakes and a green belt, and the
+  massing generator leaves the water and parks empty. Buildings come in three material
+  families (concrete, glass, lit glass) plus a height ramp, so the skyline is not one substance.
+- Aircraft leave a fading forty-breadcrumb trail (a `TripsLayer`) and cast a ground shadow
+  scaled by altitude, so motion is visible in a still frame. A single pulse of light travels
+  each corridor, so the airspace reads as in use rather than drawn.
+- Corridors carry in-scene labels with their ceilings in the corridor and command beats, and the
+  network beat draws arcs between hubs.
+- Selecting an aircraft in the operations view now flies the camera to it (16.1 zoom) and
+  follows it. Focus is cleared on entering any wide beat, so the network culmination always
+  pulls back; an earlier version followed the last-selected aircraft into the wide shot.
+- A one-pixel scroll progress line and a fifteen-chapter rail on the right give the page the
+  instrument feel of the console it advertises. Sections keep clear of the rail on desktop.
+
+Verification note: this automation pane can hand back a stale capture of a WebGL canvas
+while deck.gl reports 116 fps. Nudging the emulated viewport by one pixel before a screenshot
+forces a fresh capture; every visual claim above was checked that way.

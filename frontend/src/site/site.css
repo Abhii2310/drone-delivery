@@ -119,6 +119,7 @@
 
 /* section rhythm — asymmetric, not a stack of equal cards */
 .sg-section { position: relative; min-height: 100svh; display: flex; align-items: center; padding: 96px clamp(20px, 5vw, 88px); }
+@media (min-width: 861px) { .sg-section { padding-right: clamp(100px, 9vw, 150px); } }
 .sg-section--tall { min-height: 190svh; align-items: flex-start; }
 .sg-sticky { position: sticky; top: 22vh; }
 

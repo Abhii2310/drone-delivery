@@ -1,9 +1,10 @@
 import { Deck, MapView, AmbientLight, DirectionalLight, LightingEffect } from '@deck.gl/core'
 import type { Layer, PickingInfo } from '@deck.gl/core'
-import { IconLayer, LineLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
+import { ArcLayer, IconLayer, LineLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
+import { TripsLayer } from '@deck.gl/geo-layers'
 import {
   CITY, CORRIDORS, SITES, ZONES, HERO_DRONE, toLL, world, step, droneById,
-  type Building, type Car, type Drone, type Site, type Zone, type Corridor,
+  type Building, type Car, type Drone, type Site, type Zone, type Corridor, type Surface,
 } from './sim'
 
 export type SceneMode =
@@ -78,19 +79,29 @@ export function setMode(next: SceneMode): void {
   if (next === mode) return
   mode = next
   userCam = false
-  if (next !== 'DRONE') focus = next === 'INCIDENT' || next === 'CONFLICT' ? HERO_DRONE : focus
+  if (next === 'INCIDENT' || next === 'CONFLICT') focus = HERO_DRONE
+  else if (!KEEP_FOCUS.has(next)) focus = null
   retarget()
 }
 
 export function setFocus(id: string | null): void {
   focus = id
+  userCam = false
   retarget()
 }
+
+let firstFrameAt = 0
+/** True once the scene has drawn a frame; the boot overlay waits on it. */
+export const sceneReady = () => firstFrameAt > 0
 
 /** Landing sections fade the scene in and out so text is always readable over it. */
 export function setIntensity(v: number): void {
   intensity = Math.max(0, Math.min(1, v))
 }
+
+// only the operations view follows a selected aircraft; wide shots always pull back
+const FOLLOW_MODES = new Set<SceneMode>(['OPS'])
+const KEEP_FOCUS = new Set<SceneMode>(['OPS', 'DRONE', 'INCIDENT', 'CONFLICT', 'LANDING'])
 
 function retarget(): void {
   const base = KEYFRAMES[mode]
@@ -98,6 +109,14 @@ function retarget(): void {
     const d = droneById(focus ?? HERO_DRONE)
     if (d) {
       target = { ...base, longitude: d.lng, latitude: d.lat, bearing: mode === 'DRONE' ? d.heading : base.bearing }
+      return
+    }
+  }
+  // selecting an aircraft in an operations view flies to it and tightens the frame
+  if (focus && FOLLOW_MODES.has(mode)) {
+    const d = droneById(focus)
+    if (d) {
+      target = { ...base, longitude: d.lng, latitude: d.lat, zoom: Math.max(base.zoom, 16.1), pitch: Math.max(base.pitch, 58) }
       return
     }
   }
@@ -126,6 +145,9 @@ function tween(dt: number): void {
   } else if (mode === 'INCIDENT' || mode === 'CONFLICT') {
     const d = droneById(focus ?? HERO_DRONE)
     if (d) target = { ...KEYFRAMES[mode], longitude: d.lng, latitude: d.lat }
+  } else if (focus && FOLLOW_MODES.has(mode)) {
+    const d = droneById(focus)
+    if (d) target = { ...target, longitude: d.lng, latitude: d.lat }
   }
   const k = mode === 'DRONE' ? Math.min(1, dt * 2.6) : Math.min(1, dt * 1.25)
   cam.longitude += (target.longitude - cam.longitude) * k
@@ -151,16 +173,33 @@ function buildLayers(now: number): Layer[] {
   const layers: Layer[] = []
 
   layers.push(
+    new PolygonLayer<Surface>({
+      id: 'sg-surfaces',
+      data: CITY.surfaces,
+      getPolygon: (f) => f.ll,
+      getFillColor: (f) => (f.kind === 'WATER' ? a([14, 34, 58], 255) : f.kind === 'PARK' ? a([12, 26, 24], 255) : a([11, 16, 24], 255)),
+      getLineColor: (f) => (f.kind === 'WATER' ? a([32, 78, 110], 160) : f.kind === 'PARK' ? a([28, 54, 44], 120) : a([20, 28, 38], 90)),
+      getLineWidth: 1,
+      lineWidthUnits: 'pixels',
+      stroked: true,
+      filled: true,
+      extruded: false,
+      material: false,
+      pickable: false,
+    }),
     new PolygonLayer<Building>({
       id: 'sg-buildings',
       data: CITY.buildings,
       extruded: true,
       getPolygon: (b) => b.ll,
       getElevation: (b) => b.h,
-      // a height ramp does the work a texture would; taller massing reads cooler
+      // three material families and a height ramp do the work a texture would
       getFillColor: (b) => {
         const t = Math.min(1, b.h / 190)
-        return [16 + t * 16, 22 + t * 22, 32 + t * 30, Math.round(255 * intensity)]
+        const al = Math.round(255 * intensity)
+        if (b.kind === 2) return [44 + t * 18, 64 + t * 26, 92 + t * 34, al]  // lit glass, cool
+        if (b.kind === 1) return [30 + t * 16, 42 + t * 24, 62 + t * 34, al]  // glass
+        return [24 + t * 14, 32 + t * 18, 46 + t * 26, al]                     // concrete
       },
       getLineColor: a([46, 62, 82], 90),
       getLineWidth: 1,
@@ -174,7 +213,7 @@ function buildLayers(now: number): Layer[] {
       id: 'sg-roads',
       data: CITY.roads,
       getPath: (r) => r.map(([x, y]) => toLL(x, y)),
-      getColor: a([32, 44, 60], 210),
+      getColor: a([38, 52, 70], 220),
       getWidth: 13,
       widthUnits: 'meters',
       widthMinPixels: 1,
@@ -232,14 +271,75 @@ function buildLayers(now: number): Layer[] {
   }
 
   if (showAir(mode)) {
+    const corridorPath = (c: Corridor) => c.pts.map(([x, y]) => [...toLL(x, y), c.alt] as [number, number, number])
     layers.push(
       new PathLayer<Corridor>({
         id: 'sg-corridors',
         data: CORRIDORS,
-        getPath: (c) => c.pts.map(([x, y]) => [...toLL(x, y), c.alt] as [number, number, number]),
-        getColor: (c) => (c.kind === 'EMERGENCY' ? a(AMBER, 120) : a(CYAN, 82)),
-        getWidth: 3,
+        getPath: corridorPath,
+        getColor: (c) => (c.kind === 'EMERGENCY' ? a(AMBER, 110) : a(CYAN, 70)),
+        getWidth: 2.5,
         widthUnits: 'pixels',
+      }),
+      // one pulse of light travelling each corridor, so the airspace reads as in use
+      new TripsLayer<Corridor>({
+        id: 'sg-corridor-flow',
+        data: CORRIDORS,
+        getPath: corridorPath,
+        getTimestamps: (c) => {
+          let acc = 0
+          return c.pts.map((p, i) => {
+            if (i > 0) acc += Math.hypot(p[0] - c.pts[i - 1][0], p[1] - c.pts[i - 1][1])
+            return acc
+          })
+        },
+        getColor: (c) => (c.kind === 'EMERGENCY' ? a(AMBER, 255) : a(CYAN, 255)),
+        currentTime: (now / 1000) * 260,
+        trailLength: 420,
+        fadeTrail: true,
+        getWidth: 4,
+        widthUnits: 'pixels',
+        capRounded: true,
+        jointRounded: true,
+        updateTriggers: { currentTime: now },
+      }),
+    )
+    if (mode === 'CORRIDOR' || mode === 'GOV') {
+      layers.push(
+        new TextLayer<Corridor>({
+          id: 'sg-corridor-labels',
+          data: CORRIDORS,
+          getPosition: (c) => [...toLL(c.pts[1][0], c.pts[1][1]), c.alt + 14] as [number, number, number],
+          getText: (c) => `${c.kind} CORRIDOR · ${c.alt} M`,
+          getSize: 10,
+          sizeUnits: 'pixels',
+          getColor: (c) => (c.kind === 'EMERGENCY' ? a(AMBER, 230) : a(CYAN, 210)),
+          billboard: true,
+          fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+          characterSet: 'auto',
+          background: true,
+          getBackgroundColor: a([4, 7, 12], 170),
+          backgroundPadding: [6, 3],
+        }),
+      )
+    }
+  }
+
+  if (mode === 'NETWORK' || mode === 'GOV') {
+    const hubs = SITES.filter((x) => x.kind === 'HUB' || x.kind === 'HOSPITAL')
+    const pairs: { from: Site; to: Site }[] = []
+    for (let i = 0; i < hubs.length; i++) for (let j = i + 1; j < hubs.length; j++) pairs.push({ from: hubs[i], to: hubs[j] })
+    layers.push(
+      new ArcLayer<{ from: Site; to: Site }>({
+        id: 'sg-network-arcs',
+        data: pairs,
+        getSourcePosition: (p) => [...toLL(p.from.x, p.from.y), 4] as [number, number, number],
+        getTargetPosition: (p) => [...toLL(p.to.x, p.to.y), 4] as [number, number, number],
+        getSourceColor: a(CYAN, 150),
+        getTargetColor: a([90, 112, 138], 60),
+        getWidth: 1.5,
+        widthUnits: 'pixels',
+        getHeight: 0.35,
       }),
     )
   }
@@ -289,6 +389,29 @@ function buildLayers(now: number): Layer[] {
   const shown = drones.filter((d) => d.id !== hidden)
 
   layers.push(
+    new ScatterplotLayer<Drone>({
+      id: 'sg-drone-shadows',
+      data: shown,
+      getPosition: (d) => [d.lng, d.lat, 0.5],
+      getRadius: (d) => 5 + d.alt * 0.045,
+      radiusUnits: 'meters',
+      getFillColor: a([2, 4, 8], 120),
+      updateTriggers: { getPosition: now },
+    }),
+    new TripsLayer<Drone>({
+      id: 'sg-trails',
+      data: shown.filter((d) => d.trail.length > 2),
+      getPath: (d) => d.trail,
+      getTimestamps: (d) => d.trail.map((_, i) => i),
+      getColor: (d) => (d.flagged || d.mission === 'EMERGENCY' ? a(RED, 200) : a(MISSION_COLOR[d.mission] ?? CYAN, 170)),
+      currentTime: 40,
+      trailLength: 40,
+      fadeTrail: true,
+      getWidth: 1.6,
+      widthUnits: 'pixels',
+      capRounded: true,
+      updateTriggers: { getPath: now, getColor: world.emergency },
+    }),
     new LineLayer<Drone>({
       id: 'sg-tethers',
       data: shown,
@@ -418,8 +541,8 @@ function sample(now: number): void {
 // ── mount ────────────────────────────────────────────────────────────────────
 export function mountScene(canvas: HTMLCanvasElement): () => void {
   const lighting = new LightingEffect({
-    ambient: new AmbientLight({ color: [150, 178, 208], intensity: 0.9 }),
-    key: new DirectionalLight({ color: [180, 205, 235], intensity: 1.15, direction: [-1.1, -2.4, -1] }),
+    ambient: new AmbientLight({ color: [150, 178, 208], intensity: 1.0 }),
+    key: new DirectionalLight({ color: [185, 208, 238], intensity: 1.55, direction: [-1.1, -2.4, -1] }),
     fill: new DirectionalLight({ color: [70, 120, 160], intensity: 0.5, direction: [1.4, 1.2, -0.6] }),
   })
   deck = new Deck<MapView>({
@@ -448,6 +571,7 @@ export function mountScene(canvas: HTMLCanvasElement): () => void {
   ;(window as unknown as { __sg?: object }).__sg = {
     mode: () => mode, focus: () => focus, cam: () => ({ ...cam }), target: () => ({ ...target }), userCam: () => userCam,
     world: () => world,
+    deck: () => deck,
   }
   last = performance.now()
   const loop = () => {
@@ -458,6 +582,7 @@ export function mountScene(canvas: HTMLCanvasElement): () => void {
     tween(dt)
     sample(now)
     deck?.setProps({ viewState: cam, layers: buildLayers(now) })
+    if (!firstFrameAt) firstFrameAt = now
     raf = requestAnimationFrame(loop)
   }
   raf = requestAnimationFrame(loop)

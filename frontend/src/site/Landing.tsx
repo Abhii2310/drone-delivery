@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import './site.css'
 import { mountScene, setMode } from './scene'
 import {
-  Accountability, AskTheGrid, Audience, Climb, DroneView, Emergency, Finale, Footer, Government, Hero,
-  Incidents, Intelligence, LandingNet, LiveFeed, Nav, Network, Ops,
+  Accountability, AskTheGrid, Audience, Boot, Chapters, Climb, DroneView, Emergency, Finale, Footer, Government, Hero,
+  Incidents, Intelligence, LandingNet, LiveFeed, Nav, Network, Ops, Progress,
 } from './sections'
 
 /** The whole page is one scene. Sections scroll over a fixed canvas and hand it the camera. */
@@ -25,6 +25,8 @@ export default function Landing() {
       <div className="sg-atmos" />
       <div className="sg-grid-overlay" />
       <Nav />
+      <Progress />
+      <Chapters />
       <main className="sg-flow">
         <Hero />
         <Climb />
@@ -43,6 +45,7 @@ export default function Landing() {
         <Finale />
       </main>
       <Footer />
+      <Boot />
     </div>
   )
 }

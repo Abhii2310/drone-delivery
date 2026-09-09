@@ -28,6 +28,7 @@ export type Drone = {
   dir: 1 | -1
   targetAlt: number
   flagged: boolean
+  trail: [number, number, number][]
 }
 
 export type Incident = {
@@ -46,7 +47,28 @@ export type Incident = {
 export type Site = { id: string; kind: 'HUB' | 'SKYPORT' | 'HOSPITAL' | 'GROUND'; x: number; y: number; label: string; status: 'AVAILABLE' | 'AT CAPACITY' | 'CONDITIONAL' }
 export type Zone = { id: string; label: string; kind: 'RESTRICTED' | 'QUIET' | 'EMERGENCY'; ring: [number, number][]; ceiling: number }
 export type Corridor = { id: number; label: string; alt: number; kind: 'DELIVERY' | 'EMERGENCY' | 'INDUSTRIAL'; pts: [number, number][] }
-export type Building = { ring: [number, number][]; ll: [number, number][]; h: number; lit: boolean; x: number; y: number }
+export type Building = { ring: [number, number][]; ll: [number, number][]; h: number; lit: boolean; x: number; y: number; kind: 0 | 1 | 2 }
+export type Surface = { ll: [number, number][]; kind: 'BLOCK' | 'PARK' | 'WATER' }
+
+// two lakes and a green belt, in metres; the massing generator leaves them empty
+const WATER: [number, number][][] = [
+  [[-1560, 880], [-940, 820], [-860, 1300], [-1240, 1460], [-1620, 1280]],
+  [[880, -720], [1420, -760], [1480, -340], [1000, -280]],
+]
+const PARKS: [number, number][][] = [
+  [[-360, -140], [420, -180], [460, 440], [-300, 480]],
+  [[1500, 1200], [2100, 1160], [2140, 1700], [1540, 1740]],
+]
+const inside = (x: number, y: number, ring: [number, number][]) => {
+  let hit = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]
+    const [xj, yj] = ring[j]
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit
+  }
+  return hit
+}
+const onSurface = (x: number, y: number) => WATER.some((r) => inside(x, y, r)) || PARKS.some((r) => inside(x, y, r))
 export type Car = { seg: number; t: number; dir: 1 | -1; speed: number }
 
 // ── geography ────────────────────────────────────────────────────────────────
@@ -71,6 +93,10 @@ const BLOCK = 300
 function buildCity() {
   const r = rng(1337)
   const buildings: Building[] = []
+  const surfaces: Surface[] = [
+    ...WATER.map((r): Surface => ({ ll: r.map(([x, y]) => toLL(x, y)), kind: 'WATER' })),
+    ...PARKS.map((r): Surface => ({ ll: r.map(([x, y]) => toLL(x, y)), kind: 'PARK' })),
+  ]
   const roads: [number, number][][] = []
   const lights: { x: number; y: number; h: number; warm: boolean }[] = []
 
@@ -91,7 +117,9 @@ function buildCity() {
       const cy = (y0 + y1) / 2
       const d = Math.hypot(cx, cy)
       const edge = Math.max(Math.abs(cx), Math.abs(cy)) / EXTENT
-      if (r() < 0.09 + Math.max(0, edge - 0.62) * 1.6) continue // parks and voids, thinning toward the edge
+      if (onSurface(cx, cy)) continue
+      surfaces.push({ ll: [[x0 - 14, y0 - 14], [x1 + 14, y0 - 14], [x1 + 14, y1 + 14], [x0 - 14, y1 + 14]].map(([bx, by]) => toLL(bx, by)), kind: 'BLOCK' })
+      if (r() < 0.07 + Math.max(0, edge - 0.62) * 1.6) continue // voids, thinning toward the edge
       // two to four parcels per block so the skyline is not a single slab
       const parcels = 2 + Math.floor(r() * 3)
       for (let p = 0; p < parcels; p++) {
@@ -102,11 +130,14 @@ function buildCity() {
         const core = Math.max(0, 1 - d / (EXTENT * 1.05))
         const h = 16 + core * core * 150 * (0.4 + r()) + r() * 34
         const ring: [number, number][] = [[px, py], [px + w, py], [px + w, py + dp], [px, py + dp]]
+        // three material families so the skyline is not one substance: concrete, glass, lit
+        const kr = r()
         buildings.push({
           ring,
           ll: ring.map(([bx, by]) => toLL(bx, by)),
           h,
           lit: r() < 0.42,
+          kind: kr < 0.55 ? 0 : kr < 0.86 ? 1 : 2,
           x: px + w / 2,
           y: py + dp / 2,
         })
@@ -119,7 +150,7 @@ function buildCity() {
   for (let i = 0; i < 260; i++) {
     cars.push({ seg: Math.floor(r() * roads.length), t: r(), dir: r() < 0.5 ? 1 : -1, speed: 0.006 + r() * 0.012 })
   }
-  return { buildings, roads, lights, cars }
+  return { buildings, surfaces, roads, lights, cars }
 }
 
 export const CITY = buildCity()
@@ -229,6 +260,7 @@ function buildFleet(): Drone[] {
       t,
       dir,
       flagged: false,
+      trail: [],
     })
   }
   return fleet
@@ -400,6 +432,11 @@ export function step(dt: number): void {
     d.heading += delta * Math.min(1, dt * 3)
     d.alt += (d.targetAlt - d.alt) * Math.min(1, dt * 1.4)
     d.battery = Math.max(6, d.battery - dt * 0.055)
+    // one breadcrumb every quarter second of flight, forty deep
+    if (Math.floor(world.clock * 4) !== Math.floor((world.clock - dt) * 4)) {
+      d.trail.push([lng, lat, d.alt])
+      if (d.trail.length > 40) d.trail.shift()
+    }
     if (d.battery < 24 && d.status === 'IN_FLIGHT') d.status = 'RETURNING'
   }
   for (const car of CITY.cars) {

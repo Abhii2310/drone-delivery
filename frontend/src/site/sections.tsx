@@ -4,13 +4,30 @@ import {
   nextIncident, record, resolveConflict, setEmergency, visibleDrones, world,
   type Drone, type MissionKind, type Role,
 } from './sim'
-import { getSnapshot, setFocus, setIntensity, setMode, subscribe, type SceneMode } from './scene'
+import { getSnapshot, sceneReady, setFocus, setIntensity, setMode, subscribe, type SceneMode } from './scene'
 import OnboardFeed, { FEED_ATTRIBUTION } from '@/components/ui/scroll-locked-video-hero'
 
 export const COMMAND_URL = '/signin'
 
 // ── primitives ───────────────────────────────────────────────────────────────
 export const useWorld = () => useSyncExternalStore(subscribe, getSnapshot)
+
+// which story beat owns the viewport, for the chapter rail and the progress line
+let activeId = 'hero'
+const activeListeners = new Set<() => void>()
+const setActive = (id: string) => {
+  if (id === activeId) return
+  activeId = id
+  activeListeners.forEach((fn) => fn())
+}
+const useActive = () => useSyncExternalStore((fn) => { activeListeners.add(fn); return () => { activeListeners.delete(fn) } }, () => activeId)
+
+export const CHAPTERS: [string, string][] = [
+  ['hero', 'Airspace'], ['climb', 'The city'], ['ops', 'Operations'], ['drone', 'Drone view'], ['feed', 'Onboard'],
+  ['intelligence', 'Coordination'], ['incidents', 'Incidents'], ['emergency', 'Emergency'], ['government', 'Command'],
+  ['landing', 'Way home'], ['ask', 'Ask the grid'], ['accountability', 'Accountability'], ['audience', 'Who it is for'],
+  ['network', 'The network'], ['finale', 'Coordinated'],
+]
 
 type SectionProps = {
   id: string
@@ -40,6 +57,7 @@ export function Section({ id, mode, intensity = 1, tall, className = '', onEnter
           active = true
           setMode(mode)
           setIntensity(intensity)
+          setActive(id)
           enter.current?.()
         } else if (!e.isIntersecting && active) {
           active = false
@@ -58,7 +76,7 @@ export function Section({ id, mode, intensity = 1, tall, className = '', onEnter
       io.disconnect()
       reveal.disconnect()
     }
-  }, [mode, intensity])
+  }, [mode, intensity, id])
   return (
     <section ref={ref} id={id} className={`sg-section ${tall ? 'sg-section--tall' : ''} ${className}`}>
       {children}
@@ -97,6 +115,80 @@ function Big({ n, label, tone }: { n: string; label: string; tone?: 'cyan' | 'am
 const Arrow = () => <span aria-hidden>→</span>
 
 const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+// ── boot, progress, chapters ─────────────────────────────────────────────────
+const BOOT_LINES = ['CITY MODEL · 1,400 STRUCTURES', 'CORRIDORS · 8 · CEILINGS SET', 'AIRCRAFT · 24 ONLINE', 'GRID READY']
+
+/** A short boot sequence that holds until the scene has drawn, then gets out of the way. */
+export function Boot() {
+  const [lines, setLines] = useState(0)
+  const [gone, setGone] = useState(false)
+  const [fading, setFading] = useState(false)
+  useEffect(() => {
+    const t = setInterval(() => setLines((n) => Math.min(BOOT_LINES.length, n + 1)), 260)
+    const check = setInterval(() => {
+      if (lines >= BOOT_LINES.length && sceneReady()) {
+        setFading(true)
+        setTimeout(() => setGone(true), 700)
+        clearInterval(check)
+      }
+    }, 120)
+    return () => { clearInterval(t); clearInterval(check) }
+  }, [lines])
+  if (gone) return null
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end" style={{ background: 'var(--void)', opacity: fading ? 0 : 1, transition: 'opacity 700ms var(--ease-out)', pointerEvents: fading ? 'none' : 'auto' }}>
+      <div className="p-8 md:p-12">
+        <div style={{ font: '600 15px/1 var(--font-ui)', letterSpacing: '0.3em' }}>SKYGRID</div>
+        <div className="sg-mono sg-faint mt-3">INITIALISING SECTOR BLR-C</div>
+        <div className="mt-6">
+          {BOOT_LINES.slice(0, lines).map((l, i) => (
+            <div key={l} className="sg-mono py-1" style={{ color: i === BOOT_LINES.length - 1 ? 'var(--cyan)' : 'var(--text-dim)' }}>▸ {l}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function Progress() {
+  const [p, setP] = useState(0)
+  useEffect(() => {
+    const on = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      setP(max > 0 ? window.scrollY / max : 0)
+    }
+    on()
+    window.addEventListener('scroll', on, { passive: true })
+    return () => window.removeEventListener('scroll', on)
+  }, [])
+  return <div className="fixed top-0 left-0 z-50 h-px" style={{ width: `${p * 100}%`, background: 'var(--cyan)', boxShadow: '0 0 8px var(--cyan)', transition: 'width 120ms linear' }} />
+}
+
+export function Chapters() {
+  const active = useActive()
+  return (
+    <nav aria-label="Chapters" className="sg-desktop-only fixed top-1/2 right-4 z-40 -translate-y-1/2">
+      {CHAPTERS.map(([id, label], i) => {
+        const on = id === active
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => scrollTo(id)}
+            title={label}
+            className="group flex items-center justify-end gap-3 py-[5px]"
+            style={{ background: 'none', border: 0, cursor: 'pointer', color: on ? 'var(--cyan)' : 'var(--text-faint)' }}
+          >
+            <span className="sg-mono opacity-0 transition-opacity group-hover:opacity-100" style={{ fontSize: 9.5 }}>{label.toUpperCase()}</span>
+            <span className="sg-mono" style={{ fontSize: 9.5, width: 18, textAlign: 'right' }}>{(i + 1).toString().padStart(2, '0')}</span>
+            <span style={{ width: on ? 18 : 8, height: 1, background: 'currentColor', transition: 'width 300ms var(--ease-out)' }} />
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
 
 // ── 00 nav ───────────────────────────────────────────────────────────────────
 export function Nav() {
@@ -148,6 +240,7 @@ export function Hero() {
         <div className="grid gap-10 md:grid-cols-12 md:items-end">
           <div className="md:col-span-8">
             <Eyebrow>Command layer · Low-altitude operations</Eyebrow>
+            <div className="sg-mono sg-faint sg-reveal mt-2">12.9716° N · 77.5946° E · BENGALURU · SECTOR BLR-C</div>
             <h1 className="sg-h sg-reveal mt-6" style={{ fontSize: 'clamp(44px, min(9.2vw, 13.5vh), 150px)' }}>
               The city<br />has a new<br />airspace.
             </h1>
