@@ -1,3 +1,5 @@
+# Render Blueprint. Creating the service from this file sets every field correctly,
+# which is safer than filling the New Web Service form by hand.
 services:
   - type: web
     name: skyguard-backend
@@ -5,12 +7,13 @@ services:
     plan: free
     region: singapore
     rootDir: backend
+    branch: main
     buildCommand: pip install -r requirements.txt
-    # Render supplies $PORT; one process, one asyncio loop, as the app requires
+    # Render supplies $PORT. One process, one asyncio loop, as the app requires.
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
+      # newer interpreters than this have not been verified against these pinned deps
       - key: PYTHON_VERSION
         value: 3.13.4
-      - key: SKYGUARD_ORIGINS
-        sync: false
