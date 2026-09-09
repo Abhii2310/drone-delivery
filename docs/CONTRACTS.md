@@ -573,3 +573,29 @@ What changed and why, in the order a viewer meets it:
 Verification note: this automation pane can hand back a stale capture of a WebGL canvas
 while deck.gl reports 116 fps. Nudging the emulated viewport by one pixel before a screenshot
 forces a fresh capture; every visual claim above was checked that way.
+
+## Deployment: frontend on Vercel, backend on Render
+
+Vercel serves static files and cannot hold a WebSocket open, so the two halves are deployed
+separately and the frontend is told where the backend lives.
+
+- `frontend/src/lib/api.ts` is the only place that knows. `VITE_API_BASE` empty means local
+  development, where the Vite proxy forwards `/api` and `/ws` to port 8000 and everything is
+  same-origin. Set to an origin, every REST call and the telemetry socket address that host
+  directly, with `ws`/`wss` chosen to match the page's scheme.
+- All eleven REST call sites go through `api()`. The socket goes through `socketUrl()`.
+- The backend's CORS allowlist is `SKYGUARD_ORIGINS`, comma separated, defaulting to
+  `http://localhost:5173`, plus a regex for `https://*.vercel.app` so preview deployments,
+  which get a fresh subdomain each time, work without reconfiguration.
+- `render.yaml` is a blueprint: Python 3.13.4, `rootDir: backend`, one uvicorn process bound
+  to `$PORT`, health check on `/health`. Requirements are pinned to the versions the app was
+  built against.
+
+Verified by running the frontend on port 5173 against the backend on 127.0.0.1:8000, which is
+a genuinely different origin: the socket connected to the remote host and uvicorn logged it
+accepted, a cross-origin `POST /api/scenario/TRIGGER_COLLISION` succeeded, and the full hero
+flow ran (conflict predicted at 6.6 m, supervisor recommendation, approval). A foreign origin
+correctly receives no allow header.
+
+Known limit of the free Render plan: the service sleeps after inactivity and takes roughly a
+minute to wake, and the simulation is in-memory so it restarts from the fixture when it does.

@@ -1,3 +1,4 @@
+import { api } from '../lib/api'
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import { MapboxOverlay } from '@deck.gl/mapbox'
@@ -226,7 +227,7 @@ export default function MapCanvas() {
           setTimeout(() => body.classList.add('emergency-frame'), 180)           // t=180
           setTimeout(() => store.setEmergencyPhase(200), 200)                    // t=200 colour crossfade
           setTimeout(async () => {                                               // t=400 polygon rises
-            const raw = await (await fetch('/api/city')).json()
+            const raw = await (await fetch(api('/api/city'))).json()
             refreshCity(raw)
             store.setEmergencyPhase(400)
           }, 400)
@@ -240,7 +241,7 @@ export default function MapCanvas() {
           body.classList.remove('emergency-frame')
           setTimeout(() => body.classList.remove('emergency'), 600)
           store.setEmergencyPhase(0)
-          fetch('/api/city').then((r) => r.json()).then((raw) => { refreshCity(raw); bumpRevision() })
+          fetch(api('/api/city')).then((r) => r.json()).then((raw) => { refreshCity(raw); bumpRevision() })
           store.pushEvent({ id: `emg-off-${payload.clock}`, clock: payload.clock, kind, text: 'emergency stood down' })
         }
         return

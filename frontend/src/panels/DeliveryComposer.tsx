@@ -1,3 +1,4 @@
+import { api } from '../lib/api'
 import { useState } from 'react'
 import { getCity } from '../lib/city'
 import { useFleet } from '../lib/fleet'
@@ -51,7 +52,7 @@ export default function DeliveryComposer() {
     }
     setBusy(true)
     try {
-      const res = await fetch('/api/missions', {
+      const res = await fetch(api('/api/missions'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ type: 'DELIVERY', payload_kind: payload, priority, origin_hub_id: origin, dest_id: dest }),

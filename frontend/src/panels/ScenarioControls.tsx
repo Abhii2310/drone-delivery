@@ -1,3 +1,4 @@
+import { api } from '../lib/api'
 import { useState } from 'react'
 
 const SCENARIOS: [string, string][] = [
@@ -20,7 +21,7 @@ export default function ScenarioControls() {
     setBusy(name)
     setError(null)
     try {
-      const res = await fetch(`/api/scenario/${name}`, { method: 'POST' })
+      const res = await fetch(api(`/api/scenario/${name}`), { method: 'POST' })
       if (!res.ok) {
         const body = await res.json()
         setError(typeof body.detail === 'string' ? body.detail : 'Scenario rejected.')

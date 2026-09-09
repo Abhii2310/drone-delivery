@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: skyguard-backend
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Render supplies $PORT; one process, one asyncio loop, as the app requires
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.4
+      - key: SKYGUARD_ORIGINS
+        sync: false

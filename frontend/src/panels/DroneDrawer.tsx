@@ -1,3 +1,4 @@
+import { api } from '../lib/api'
 import { useMemo } from 'react'
 import { getCity, getRouteForDrone } from '../lib/city'
 import { useFleet } from '../lib/fleet'
@@ -157,7 +158,7 @@ export default function DroneDrawer() {
               key={kind}
               type="button"
               onClick={() =>
-                fetch('/api/decisions/manual/approve', { method: 'POST' }).catch(() => undefined)
+                fetch(api('/api/decisions/manual/approve'), { method: 'POST' }).catch(() => undefined)
               }
               disabled
               className="t-title flex-1 px-3 py-2"

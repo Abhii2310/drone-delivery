@@ -1,3 +1,4 @@
+import { api } from '../lib/api'
 import { useFleet } from '../lib/fleet'
 import { useStore } from '../store'
 import RolePicker from './RolePicker'
@@ -85,7 +86,7 @@ export default function StatusBar() {
           onClick={async () => {
             const next = !aiEnabled
             setAiEnabled(next)
-            await fetch('/api/ai', {
+            await fetch(api('/api/ai'), {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({ enabled: next }),

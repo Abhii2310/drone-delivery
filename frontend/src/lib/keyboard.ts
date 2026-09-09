@@ -1,3 +1,4 @@
+import { api } from './api'
 import { useStore } from '../store'
 import { getInterpolated } from './telemetry'
 
@@ -52,7 +53,7 @@ export function handleKey(e: KeyboardEvent, ctx: KeyContext): void {
       break
     case 'x':
     case 'X':
-      if (s.decision) void fetch(`/api/decisions/${s.decision.id}/reject?role=${s.role}`, {
+      if (s.decision) void fetch(api(`/api/decisions/${s.decision.id}/reject?role=${s.role}`), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ actor: 'operator' }),
@@ -64,7 +65,7 @@ export function handleKey(e: KeyboardEvent, ctx: KeyContext): void {
       break
     case ' ':
       e.preventDefault()
-      void fetch('/api/pause', {
+      void fetch(api('/api/pause'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ paused: !s.paused }),

@@ -1,3 +1,4 @@
+import { api } from '../lib/api'
 import { useEffect, useRef, useState } from 'react'
 import DeliveryComposer from './DeliveryComposer'
 import { useStore, type ActionRecord } from '../store'
@@ -140,7 +141,7 @@ export default function SupervisorRail() {
     setError(null)
     setApplying(true)
     try {
-      const res = await fetch(`/api/decisions/${decision.id}/${path}`, {
+      const res = await fetch(api(`/api/decisions/${decision.id}/${path}`), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ actor: 'operator', alternative_index: path === 'approve' ? selected : null }),
@@ -377,7 +378,7 @@ export default function SupervisorRail() {
           <button
             type="button"
             onClick={async () => {
-              await fetch(`/api/missions/${replaceable}/dispatch-replacement`, { method: 'POST' })
+              await fetch(api(`/api/missions/${replaceable}/dispatch-replacement`), { method: 'POST' })
               setReplaceable(null)
               setLandingPulse(null)
             }}

@@ -1,3 +1,4 @@
+import { api } from '../lib/api'
 import { useEffect, useState } from 'react'
 
 export default function ResetControl() {
@@ -7,7 +8,7 @@ export default function ResetControl() {
 
   async function run() {
     setBusy(true)
-    await fetch('/api/reset', { method: 'POST' })
+    await fetch(api('/api/reset'), { method: 'POST' })
     setBusy(false)
     setConfirming(false)
     setDone(new Date().toLocaleTimeString('en-GB'))

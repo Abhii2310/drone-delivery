@@ -98,9 +98,15 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="SKYGUARD", lifespan=lifespan)
 
+# The deployed frontend lives on another origin, so the allowlist is configuration, not a
+# constant. SKYGUARD_ORIGINS is comma separated; the regex covers Vercel preview builds,
+# which get a fresh subdomain per deployment.
+_origins = [o.strip() for o in os.environ.get("SKYGUARD_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
