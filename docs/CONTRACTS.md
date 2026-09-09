@@ -479,8 +479,36 @@ the camera are unchanged.
   Graphite stays the operating basemap because corridors and drone glyphs read better on it;
   photoreal is for briefing and for the demo.
 
-Known limits: the shared imagery quota returns HTTP 429 under rapid camera movement, which
-drops the layer and falls back to the graphite map rather than to a black screen. Frame rate
-under the tileset could not be measured in this environment — the automation pane throttles
-`requestAnimationFrame` to 1 fps with the tileset both on and off — so it needs one check on
-the demo machine.
+Token pool and recovery. `VITE_CESIUM_ION_TOKEN` accepts several tokens separated by commas.
+Each retry advances to the next one, so a revoked token falls through. Measured caveat: ion
+hands every token on the same account the identical Google API key, verified by comparing the
+key across three tokens, so extra tokens buy resilience against revocation and not extra
+imagery quota. The quota is the shared key's, and it refuses in bursts.
+
+What that means in practice, and what the code does about it:
+
+- Tile requests are throttled to six in flight, which is what keeps the key out of its burst
+  limit during a camera move.
+- A refusal is retried with a backoff doubling from 5 s to 40 s, advancing the token each
+  time, rather than latched as a permanent failure.
+- A tileset root can be refused without any individual tile erroring, leaving a layer that
+  will never draw. A 12 s watchdog rebuilds it instead of leaving a dead layer on screen.
+- `photorealReady()` is true only once a tile has actually loaded, not when the tileset JSON
+  parses. The vector basemap hides on that signal, so a throttled session shows the graphite
+  map rather than a black screen. Observed recovering on its own from token 1 to token 2
+  mid-session with the graphite map up throughout.
+
+The imagery is tinted `[30, 36, 46]`, multiplied into every texel by the scenegraph sublayer's
+`getColor`. The luma PBR shader computes `texture * baseColorFactor * vertexColor`, so this is
+a direct exposure control rather than a lighting trick, and it leaves the unlit overlay layers
+untouched. `window.__sky.tint([r,g,b])` rebuilds the tileset at another value for tuning
+against a projector.
+
+Cesium OSM Buildings (ion asset 96188) was built as a second source and then removed. Its
+tileset resolves and loads, but the traversal selected no tiles and requested no geometry in
+this environment, and an unverifiable fallback that holds the screen for 12 s before reaching
+the graphite map is worse than going to the graphite map directly.
+
+Known limits: frame rate under the tileset could not be measured here — the automation pane
+throttles `requestAnimationFrame` to 1 fps with the tileset both on and off — so it needs one
+check on the demo machine.

@@ -6,7 +6,7 @@ import { updateChaseCam } from '../map/FollowCam'
 import { useStore } from '../store'
 import type maplibregl from 'maplibre-gl'
 import { buildAirspaceLayers } from './airspace'
-import { photorealLayers } from './photoreal'
+import { photorealFailure, photorealLayers, photorealReady, photorealTokenInUse, setPhotorealTint } from './photoreal'
 import { tokenRgb, type Rgb } from './tokens'
 
 const QUADCOPTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
@@ -164,13 +164,16 @@ export function startRender(overlay: MapboxOverlay, map: maplibregl.Map): void {
     }
     lastFrameMs = now
     const photoreal = useStore.getState().photoreal
+    const overImagery = photoreal && photorealReady()
     overlay.setProps({
-      layers: [...photorealLayers(photoreal), ...buildAirspaceLayers(), ...buildLayers(lastViews, now, photoreal)],
+      layers: [...photorealLayers(photoreal), ...buildAirspaceLayers(), ...buildLayers(lastViews, now, overImagery)],
     })
     frameId = requestAnimationFrame(loop)
   }
   frameId = requestAnimationFrame(loop)
-  ;(window as unknown as { __sky?: object }).__sky = { getFps, views: () => lastViews, debug: () => debug(performance.now()) }
+  ;(window as unknown as { __sky?: object }).__sky = { getFps, views: () => lastViews, debug: () => debug(performance.now()),
+    photoreal: () => ({ ready: photorealReady(), failure: photorealFailure(), token: photorealTokenInUse() }),
+    tint: setPhotorealTint }
 }
 
 export function stopRender(): void {

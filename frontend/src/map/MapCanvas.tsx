@@ -13,7 +13,7 @@ import { connect, disconnect, onEvent, onHello, onStatus, onTick } from '../lib/
 import { enterDroneView, exitDroneView } from './FollowCam'
 import { handleKey } from '../lib/keyboard'
 import { cinematic } from '../lib/cinematic'
-import { photorealAttribution, photorealConfigured, photorealFailure } from '../lib/photoreal'
+import { photorealAttribution, photorealConfigured, photorealFailure, photorealReady } from '../lib/photoreal'
 
 export const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
 // fixture centroid, computed from backend/city.py bbox
@@ -361,7 +361,7 @@ export default function MapCanvas() {
     }
     // the vector basemap comes back the moment the imagery stops drawing, so a spent
     // quota degrades to the graphite map instead of to a black hole
-    const syncBasemap = () => setBasemap(useStore.getState().photoreal && !photorealFailure())
+    const syncBasemap = () => setBasemap(useStore.getState().photoreal && photorealReady())
     const basemapTimer = window.setInterval(syncBasemap, 1000)
     const unsubPhotoreal = useStore.subscribe(syncBasemap)
 
