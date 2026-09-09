@@ -96,7 +96,7 @@ async def lifespan(_: FastAPI):
     wx.cancel()
 
 
-app = FastAPI(title="SKYGUARD", lifespan=lifespan)
+app = FastAPI(title="SKYGRID", lifespan=lifespan)
 
 # The deployed frontend lives on another origin, so the allowlist is configuration, not a
 # constant. SKYGUARD_ORIGINS is comma separated; the regex covers Vercel preview builds,

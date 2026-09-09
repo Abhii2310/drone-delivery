@@ -44,7 +44,7 @@ export default function StatusBar() {
           ◈
         </span>
         <span className="t-display" style={{ color: 'var(--paper)' }}>
-          SKYGUARD
+          SKYGRID
         </span>
       </div>
 
