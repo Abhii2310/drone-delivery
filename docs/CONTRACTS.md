@@ -512,3 +512,40 @@ the graphite map is worse than going to the graphite map directly.
 Known limits: frame rate under the tileset could not be measured here — the automation pane
 throttles `requestAnimationFrame` to 1 fps with the tileset both on and off — so it needs one
 check on the demo machine.
+
+## SKYGRID landing, sign-in and onboard feed
+
+Routes. `/` is the SKYGRID landing page, `/signin` the role-scoped sign-in, `/command` the
+SkyGuard command center exactly as it was. All three are lazy chunks, so the landing never
+downloads MapLibre and the command center never downloads the landing scene. Vite and
+TypeScript now resolve `@/` to `src/`; the shadcn-style components live in
+`src/components/ui/`.
+
+The landing is one scene. A single fixed deck.gl canvas (`src/site/scene.ts`) renders a
+procedural night city generated from a seeded RNG in `src/site/sim.ts`: building massing that
+thins toward the edge, roads, traffic, roof lights, hubs, SkyPorts, corridors and zones. No map
+tiles, no backend, no paid API. Sections scroll over it and hand the camera a keyframe through
+an IntersectionObserver; the director eases between keyframes and never cuts. The simulation
+moves 24 aircraft with id, position, altitude, speed, battery, status, mission, priority,
+destination, home hub and operator; predicts and resolves a corridor conflict; cycles eight
+incident kinds; and switches the network into emergency mode with auto-assignment. A 4 Hz
+snapshot feeds React through `useSyncExternalStore`, so telemetry never enters React state.
+
+Sign-in (`components/ui/modern-login-signup.tsx`) was adapted from a component that loaded
+Three.js from a CDN for a dot-matrix reveal. The same shader now runs on bare WebGL2 in about
+forty lines, which keeps the repository's no-Three.js rule and works offline. Signing in means
+choosing a scope: the chosen role travels as `?role=` and `App.tsx` applies it through the same
+viewer table the role picker uses, so the server filters the fleet before the first frame.
+Verified: Fleet operator lands on `/command?role=OPERATOR` with two aircraft in the rail.
+
+Onboard feed (`components/ui/scroll-locked-video-hero.tsx`) was adapted from a music hero.
+What survived is the interaction: a square screen that tilts toward the cursor, a list with
+momentum physics and a synthesized encoder detent, working prev/play/next. What changed is the
+meaning: the screen is a nose camera, the list is the missions whose cameras are on the grid,
+and landing on one focuses that aircraft in the 3D city behind it. Two things had to change
+structurally. Wheel and touch are captured on the screen element rather than the window, so
+the page underneath still scrolls, verified by an unchanged scrollY across a wheel event. And
+the mobile branch is a phone-shaped frame in flow, not a fixed full-viewport overlay. The
+footage is real aerial night video, CC BY 3.0 via Wikimedia Commons, attributed in the section
+and standing in for a live downlink; two clips are listed so one refusal never blanks the
+screen, and a failed load renders a NO SIGNAL card.

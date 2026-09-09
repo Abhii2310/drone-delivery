@@ -1,0 +1,160 @@
+/* SKYGRID landing surface. Scoped to .skygrid so the command center at /command keeps
+   its own graphite palette untouched. */
+.skygrid {
+  --void: #04070C;
+  --midnight: #070C14;
+  --surface: rgba(11, 17, 27, 0.72);
+  --surface-solid: #0C1219;
+  --edge: #1A2634;
+  --edge-soft: #111A25;
+  --text: #E9EFF7;
+  --text-dim: #8494A6;
+  --text-faint: #566373;
+  --cyan: #35D6F0;
+  --cyan-deep: #0C7E92;
+  --amber: #E8A93C;
+  --red: #E0452F;
+  --grid: rgba(53, 214, 240, 0.055);
+
+  position: relative;
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--font-ui);
+  overflow-x: hidden;
+}
+
+/* the canvas sits under everything and is never scrolled */
+.sg-canvas-host { position: fixed; inset: 0; z-index: 0; }
+.sg-canvas-host canvas { outline: none; }
+
+/* atmospheric depth: a vignette and a horizon glow, no gradient blobs */
+.sg-atmos {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 50% 108%, rgba(53, 214, 240, 0.10), transparent 58%),
+    radial-gradient(100% 70% at 50% -10%, rgba(10, 22, 38, 0.85), transparent 60%),
+    linear-gradient(to bottom, rgba(4, 7, 12, 0.55), transparent 22%, transparent 74%, rgba(4, 7, 12, 0.9));
+}
+.sg-grid-overlay {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 96px 96px;
+  mask-image: radial-gradient(120% 90% at 50% 40%, #000 20%, transparent 78%);
+}
+
+.sg-flow { position: relative; z-index: 2; }
+
+/* type */
+.sg-eyebrow {
+  font: 500 10.5px/1 var(--font-mono); letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--cyan);
+}
+.sg-eyebrow--dim { color: var(--text-faint); }
+.sg-h {
+  font: 600 clamp(36px, min(7.2vw, 10.5vh), 104px)/0.94 var(--font-ui);
+  letter-spacing: -0.022em; text-transform: uppercase; margin: 0;
+}
+.sg-h--sm { font-size: clamp(30px, 4.6vw, 62px); }
+.sg-lede {
+  font: 400 clamp(14px, 1.28vw, 18px)/1.55 var(--font-ui);
+  color: var(--text-dim); max-width: 48ch;
+}
+.sg-mono { font: 400 11px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.sg-mono-lg { font: 500 clamp(20px, 2.3vw, 30px)/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.sg-dim { color: var(--text-dim); }
+.sg-faint { color: var(--text-faint); }
+
+/* surfaces — one glass recipe, used sparingly */
+.sg-panel {
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+}
+.sg-hair { height: 1px; background: var(--edge); border: 0; }
+.sg-vhair { width: 1px; background: var(--edge); }
+
+/* controls */
+.sg-cta {
+  display: inline-flex; align-items: center; gap: 10px;
+  font: 500 12px/1 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 15px 24px; border: 1px solid var(--cyan); color: var(--void);
+  background: var(--cyan); cursor: pointer;
+  transition: background 180ms var(--ease-out), box-shadow 240ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.sg-cta:hover { background: #7BE8FA; box-shadow: 0 0 34px rgba(53, 214, 240, 0.34); }
+.sg-cta:active { transform: translateY(1px); }
+.sg-cta--ghost {
+  background: transparent; color: var(--text); border-color: var(--edge);
+}
+.sg-cta--ghost:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: none; background: rgba(53,214,240,0.05); }
+.sg-cta--alarm { background: var(--red); border-color: var(--red); color: #fff; }
+.sg-cta--alarm:hover { background: #F0553E; box-shadow: 0 0 34px rgba(224, 69, 47, 0.4); }
+.sg-cta:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+
+.sg-navlink {
+  font: 500 11px/1 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-dim); background: none; border: 0; cursor: pointer; padding: 6px 0;
+  transition: color 160ms var(--ease-out);
+}
+.sg-navlink:hover { color: var(--text); }
+
+.sg-tab {
+  font: 500 10.5px/1 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 9px 13px; border: 1px solid var(--edge); background: transparent; color: var(--text-faint);
+  cursor: pointer; transition: all 160ms var(--ease-out);
+}
+.sg-tab:hover { color: var(--text); border-color: #2A3B4E; }
+.sg-tab[aria-pressed='true'] { color: var(--cyan); border-color: var(--cyan); background: rgba(53, 214, 240, 0.07); }
+
+/* the live dot, the only thing on the page allowed to blink */
+.sg-live { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: sg-pulse 2.4s var(--ease-out) infinite; }
+.sg-live--red { background: var(--red); box-shadow: 0 0 10px var(--red); }
+.sg-live--amber { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+@keyframes sg-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.28 } }
+
+/* reveal on scroll */
+.sg-reveal { opacity: 0; transform: translateY(22px); transition: opacity 900ms var(--ease-out), transform 900ms var(--ease-out); }
+.sg-reveal[data-in='true'] { opacity: 1; transform: none; }
+
+/* section rhythm — asymmetric, not a stack of equal cards */
+.sg-section { position: relative; min-height: 100svh; display: flex; align-items: center; padding: 96px clamp(20px, 5vw, 88px); }
+.sg-section--tall { min-height: 190svh; align-items: flex-start; }
+.sg-sticky { position: sticky; top: 22vh; }
+
+.sg-scroll-x { overflow-x: auto; scrollbar-width: thin; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sg-reveal { transition: none; opacity: 1; transform: none; }
+  .sg-live { animation: none; }
+}
+
+/* mobile: a deliberate composition, not a squeezed command center */
+@media (max-width: 860px) {
+  .sg-section { min-height: auto; padding: 72px 20px; }
+  .sg-section--tall { min-height: auto; }
+  .sg-sticky { position: static; }
+  .sg-desktop-only { display: none !important; }
+  .sg-grid-overlay { display: none; }
+}
+@media (min-width: 861px) { .sg-mobile-only { display: none !important; } }
+
+/* the one drone that crosses the closing frame */
+.sg-finale-drone {
+  position: absolute; top: -18vh; left: -6%; width: 18px; height: 18px; opacity: 0.85;
+  background: var(--cyan);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  box-shadow: 0 0 18px rgba(53,214,240,0.7);
+  animation: sg-cross 26s linear infinite;
+}
+@keyframes sg-cross { from { transform: translateX(0) } to { transform: translateX(112vw) } }
+
+/* emergency mode bleeds into the chrome, not just the panel */
+body.sg-emergency .sg-atmos {
+  background:
+    radial-gradient(120% 80% at 50% 108%, rgba(224, 69, 47, 0.16), transparent 58%),
+    radial-gradient(100% 70% at 50% -10%, rgba(24, 8, 8, 0.85), transparent 60%),
+    linear-gradient(to bottom, rgba(4, 7, 12, 0.55), transparent 22%, transparent 74%, rgba(4, 7, 12, 0.9));
+  box-shadow: inset 0 0 0 2px rgba(224, 69, 47, 0.55), inset 0 0 120px rgba(224, 69, 47, 0.12);
+  transition: box-shadow 600ms var(--ease-out);
+}
